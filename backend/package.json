@@ -1,0 +1,38 @@
+{
+  "name": "sambidhangpt-backend",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "tsx index.ts",
+    "dev": "nodemon --exec tsx watch index.ts",
+    "migrate": "drizzle-kit generate --config drizzle.config.ts",
+    "migrate:up": "drizzle-kit up --config drizzle.config.ts",
+    "migrate:down": "drizzle-kit down --config drizzle.config.ts"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "@langchain/core": "^1.1.30",
+    "@langchain/google-genai": "^2.1.24",
+    "@langchain/textsplitters": "^1.0.1",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "cors": "^2.8.6",
+    "dotenv": "^17.3.1",
+    "drizzle-kit": "^0.31.9",
+    "drizzle-orm": "^0.45.1",
+    "express": "^5.2.1",
+    "langchain": "^1.2.29",
+    "multer": "^2.1.0",
+    "nodemon": "^3.1.14",
+    "pdf-parse": "^2.4.5",
+    "pdfjs-dist": "^3.11.174",
+    "pg": "^8.19.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "winston": "^3.19.0"
+  },
+  "devDependencies": {
+    "@types/multer": "^2.0.0",
+    "@types/pg": "^8.18.0"
+  }
+}
