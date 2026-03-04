@@ -10,5 +10,5 @@ export const chunks = pgTable('chunks', {
   pageNumber: integer('page_number').notNull(),
   charOffsetStart: integer('char_offset_start').notNull(),
   charOffsetEnd: integer('char_offset_end').notNull(),
-  embedding: vector('embedding', { dimensions: 1536 }).notNull(),
+  embedding: vector('embedding', { dimensions: 3072 }).notNull(),
 })

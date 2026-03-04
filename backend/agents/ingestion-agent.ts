@@ -4,16 +4,8 @@ import { GoogleGenerativeAIEmbeddings } from '@langchain/google-genai'
 import { db } from '../configs/db-config'
 import { documents, chunks } from '../db/schema'
 import { v4 as uuidv4 } from 'uuid'
-
-// Stub ClauseAgent and SuggestionAgent
-const triggerClauseAgent = async (documentId: string) => {
-  // TODO: Implement actual clause extraction
-  return { status: 'triggered' }
-}
-const triggerSuggestionAgent = async (documentId: string) => {
-  // TODO: Implement actual suggestion generation
-  return { status: 'triggered' }
-}
+import { runClauseAgent } from './clause-agent'
+import { runSuggestionAgent } from './suggestion-agent'
 
 interface IngestionParams {
   filePath: string
@@ -91,8 +83,8 @@ export const runIngestionAgent = async ({ filePath, originalName, ownerId }: Ing
     }
 
     // 6. Trigger ClauseAgent and SuggestionAgent
-    await triggerClauseAgent(documentId)
-    await triggerSuggestionAgent(documentId)
+    await runClauseAgent(documentId)
+    await runSuggestionAgent(documentId)
 
     return { document_id: documentId, chunk_count: chunkCount, status: 'complete' }
   } catch (err: any) {
