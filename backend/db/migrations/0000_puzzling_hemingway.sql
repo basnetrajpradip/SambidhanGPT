@@ -30,6 +30,7 @@ CREATE TABLE "conversations" (
 CREATE TABLE "documents" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"name" text NOT NULL,
+	"file_path" text NOT NULL,
 	"uploaded_at" timestamp DEFAULT now() NOT NULL,
 	"owner_id" text NOT NULL
 );

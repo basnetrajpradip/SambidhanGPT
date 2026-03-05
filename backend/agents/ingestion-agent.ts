@@ -48,6 +48,7 @@ export const runIngestionAgent = async ({ filePath, originalName, ownerId }: Ing
     await db.insert(documents).values({
       id: documentId,
       name: originalName,
+      filePath,
       ownerId,
     })
 
