@@ -30,6 +30,31 @@ function normalise(s: string): string {
   return s.replace(/\s+/g, ' ').trim()
 }
 
+function normaliseWithMap(rawText: string) {
+  let normalized = ''
+  const normToRaw: number[] = []
+  let pendingSpaceRawIndex: number | null = null
+
+  for (let rawIndex = 0; rawIndex < rawText.length; rawIndex++) {
+    const char = rawText[rawIndex]
+    if (/\s/.test(char)) {
+      pendingSpaceRawIndex ??= rawIndex
+      continue
+    }
+
+    if (pendingSpaceRawIndex !== null && normalized.length > 0) {
+      normalized += ' '
+      normToRaw.push(pendingSpaceRawIndex)
+    }
+
+    normalized += char
+    normToRaw.push(rawIndex)
+    pendingSpaceRawIndex = null
+  }
+
+  return { normalized, normToRaw }
+}
+
 /**
  * mapCitationsToHighlights
  *
@@ -72,6 +97,7 @@ export async function mapCitationsToHighlights(citations: Citation[], pdfDocumen
 
       const rawStart = rawText.length
       rawText += item.str
+      rawText += ' '
       if (item.hasEOL) rawText += ' '
 
       const fontHeight = Math.abs(item.transform[3]) || Math.abs(item.transform[0]) || 12
@@ -84,18 +110,7 @@ export async function mapCitationsToHighlights(citations: Citation[], pdfDocumen
       })
     }
 
-    const normPageText = normalise(rawText)
-
-    // Walk both strings in parallel to map normalised indices back to raw indices
-    const normToRaw: number[] = new Array(normPageText.length)
-    let ni = 0
-    let ri = 0
-    const rawNorm = rawText.replace(/\s+/g, ' ')
-    while (ni < normPageText.length && ri < rawNorm.length) {
-      normToRaw[ni] = ri
-      ni++
-      ri++
-    }
+    const { normalized: normPageText, normToRaw } = normaliseWithMap(rawText)
 
     const normNeedle = normalise(citation.excerpt)
 

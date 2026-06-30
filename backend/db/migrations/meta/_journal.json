@@ -8,6 +8,20 @@
       "when": 1772616555297,
       "tag": "0000_puzzling_hemingway",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1781591345216,
+      "tag": "0001_light_sugar_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1781598840940,
+      "tag": "0002_analysis_citations",
+      "breakpoints": true
     }
   ]
 }

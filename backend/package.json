@@ -5,9 +5,10 @@
   "scripts": {
     "start": "tsx index.ts",
     "dev": "nodemon --exec tsx watch index.ts",
-    "migrate": "drizzle-kit generate --config drizzle.config.ts",
-    "migrate:up": "drizzle-kit up --config drizzle.config.ts",
-    "migrate:down": "drizzle-kit down --config drizzle.config.ts"
+    "db:generate": "drizzle-kit generate --config drizzle.config.ts",
+    "db:migrate": "drizzle-kit migrate --config drizzle.config.ts",
+    "db:studio": "drizzle-kit studio --config drizzle.config.ts",
+    "migrate": "drizzle-kit migrate --config drizzle.config.ts"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

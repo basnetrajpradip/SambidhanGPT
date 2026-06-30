@@ -1,3 +1,5 @@
+import 'dotenv/config'
+
 export default {
   schema: './db/schema',
   out: './db/migrations',

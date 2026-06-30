@@ -20,14 +20,14 @@ export interface ConversationTurn {
   turn: number
   question: string
   answer: string
+  citations: Citation[]
   createdAt: string
 }
 
-export async function sendMessage(documentId: string, question: string, history?: Array<{ role: string; content: string }>): Promise<ChatResponse> {
+export async function sendMessage(documentId: string, question: string): Promise<ChatResponse> {
   const response = await api.post<ChatResponse>('/chat', {
     documentId,
     question,
-    history: history ?? [],
   })
   return response.data
 }

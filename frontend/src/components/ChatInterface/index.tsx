@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import type { KeyboardEvent } from 'react'
 import { Send } from 'lucide-react'
 import { ChevronDown } from 'lucide-react'
 
@@ -6,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
 import { SuggestionChips } from '@/components/SuggestionChips'
-import { sendMessage, type Citation } from '@/services/chat-service'
+import { getConversation, sendMessage, type Citation } from '@/services/chat-service'
 
 interface UserMessage {
   role: 'user'
@@ -29,7 +30,7 @@ export interface ChatInterfaceProps {
 
 function TypingIndicator() {
   return (
-    <div className="flex items-end gap-1 self-start px-1">
+    <div className="flex items-end gap-1 self-start rounded-full bg-muted/80 px-3 py-2">
       {[0, 150, 300].map((delay) => (
         <span key={delay} className="block h-2 w-2 rounded-full bg-muted-foreground animate-bounce" style={{ animationDelay: `${delay}ms` }} />
       ))}
@@ -43,8 +44,10 @@ function AssistantBubble({ msg, onCitationClick }: { msg: AssistantMessage; onCi
   const [open, setOpen] = useState(false)
 
   return (
-    <div className="flex flex-col gap-1 self-start max-w-[85%]">
-      <div className="rounded-2xl rounded-tl-sm bg-muted px-3.5 py-2.5 text-sm text-foreground whitespace-pre-wrap">{msg.content}</div>
+    <div className="flex max-w-[88%] flex-col gap-1 self-start">
+      <div className="break-words rounded-2xl rounded-tl-md border border-border/70 bg-background/85 px-3.5 py-2.5 text-sm leading-relaxed text-foreground shadow-sm whitespace-pre-wrap">
+        {msg.content}
+      </div>
 
       {msg.citations.length > 0 && (
         <Collapsible open={open} onOpenChange={setOpen}>
@@ -57,7 +60,7 @@ function AssistantBubble({ msg, onCitationClick }: { msg: AssistantMessage; onCi
               <button
                 key={c.chunk_id + i}
                 onClick={() => onCitationClick?.(c)}
-                className="overflow-hidden rounded-lg border border-border bg-background px-3 py-1 text-left text-xs text-muted-foreground hover:bg-muted hover:text-foreground transition-colors line-clamp-3"
+                className="break-words rounded-xl border border-border/80 bg-card/90 px-3 py-2 text-left text-xs leading-5 text-muted-foreground shadow-sm transition-colors hover:border-primary/25 hover:bg-primary/5 hover:text-foreground"
               >
                 <span className="font-medium text-primary mr-1">p.{c.page}</span>
                 {c.excerpt}
@@ -76,22 +79,33 @@ export function ChatInterface({ documentId, suggestions, onCitationClick }: Chat
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [isRestoring, setIsRestoring] = useState(true)
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  useEffect(() => {
+    setIsRestoring(true)
+    getConversation(documentId)
+      .then((turns) => {
+        const restored = turns.flatMap<Message>((turn) => [
+          { role: 'user', content: turn.question },
+          { role: 'assistant', content: turn.answer, citations: turn.citations ?? [] },
+        ])
+        setMessages(restored)
+      })
+      .catch((err) => {
+        console.error('[ChatInterface] restore conversation failed:', err)
+      })
+      .finally(() => setIsRestoring(false))
+  }, [documentId])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, isLoading])
 
-  const buildHistory = (msgs: Message[]) =>
-    msgs.map((m) => ({
-      role: m.role,
-      content: m.role === 'user' ? m.content : (m as AssistantMessage).content,
-    }))
-
   const submit = async (question: string) => {
     const trimmed = question.trim()
-    if (!trimmed || isLoading) return
+    if (!trimmed || isLoading || isRestoring) return
 
     const userMsg: UserMessage = { role: 'user', content: trimmed }
     setMessages((prev) => [...prev, userMsg])
@@ -99,8 +113,7 @@ export function ChatInterface({ documentId, suggestions, onCitationClick }: Chat
     setIsLoading(true)
 
     try {
-      const history = buildHistory(messages)
-      const res = await sendMessage(documentId, trimmed, history)
+      const res = await sendMessage(documentId, trimmed)
       const assistantMsg: AssistantMessage = {
         role: 'assistant',
         content: res.answer,
@@ -120,7 +133,7 @@ export function ChatInterface({ documentId, suggestions, onCitationClick }: Chat
     }
   }
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       submit(input)
@@ -128,13 +141,16 @@ export function ChatInterface({ documentId, suggestions, onCitationClick }: Chat
   }
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
-      <div className="px-4 py-3 border-b shrink-0">
+    <div className="flex h-full flex-col overflow-hidden">
+      <div className="border-b border-border/70 bg-card/60 px-4 py-3 shrink-0 backdrop-blur">
         <p className="text-sm font-semibold tracking-tight">Ask a question</p>
+        <p className="text-xs text-muted-foreground">Your conversation is saved to this document.</p>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-3 py-3 flex flex-col gap-3">
-        {messages.length === 0 && !isLoading && (
+      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-3 py-4">
+        {isRestoring && <p className="text-xs text-muted-foreground text-center mt-6">Restoring conversation...</p>}
+
+        {messages.length === 0 && !isLoading && !isRestoring && (
           <>
             <p className="text-xs text-muted-foreground text-center mt-6 px-4">Ask any question about the uploaded document.</p>
             {suggestions.length > 0 && (
@@ -146,10 +162,17 @@ export function ChatInterface({ documentId, suggestions, onCitationClick }: Chat
           </>
         )}
 
+        {messages.length > 0 && suggestions.length > 0 && (
+          <div className="rounded-2xl border border-primary/10 bg-primary/5 py-2 shadow-sm">
+            <p className="px-3 pb-2 text-xs font-medium text-muted-foreground">Suggested follow-ups</p>
+            <SuggestionChips suggestions={suggestions.slice(0, 4)} onSelect={(q) => submit(q)} />
+          </div>
+        )}
+
         {messages.map((msg, i) =>
           msg.role === 'user' ? (
             <div key={i} className="flex justify-end">
-              <div className="rounded-2xl rounded-tr-sm bg-primary px-3.5 py-2.5 text-sm text-primary-foreground max-w-[85%] whitespace-pre-wrap">
+              <div className="max-w-[85%] break-words rounded-2xl rounded-tr-md bg-primary px-3.5 py-2.5 text-sm leading-relaxed text-primary-foreground shadow-lg shadow-primary/20 whitespace-pre-wrap">
                 {msg.content}
               </div>
             </div>
@@ -163,7 +186,7 @@ export function ChatInterface({ documentId, suggestions, onCitationClick }: Chat
         <div ref={bottomRef} />
       </div>
 
-      <div className="shrink-0 border-t pt-2 pb-3 flex flex-col gap-2">
+      <div className="flex shrink-0 flex-col gap-2 border-t border-border/70 bg-card/80 pb-3 pt-2 backdrop-blur">
         <div className="flex items-end gap-2 px-3">
           <Textarea
             ref={textareaRef}
@@ -172,10 +195,10 @@ export function ChatInterface({ documentId, suggestions, onCitationClick }: Chat
             onKeyDown={handleKeyDown}
             placeholder="Ask about this document…"
             rows={2}
-            disabled={isLoading}
-            className="flex-1 max-h-36"
+            disabled={isLoading || isRestoring}
+            className="max-h-36 flex-1 rounded-2xl border-border/80 bg-background/90 shadow-sm focus:ring-4 focus:ring-primary/10"
           />
-          <Button size="icon" onClick={() => submit(input)} disabled={!input.trim() || isLoading} aria-label="Send message">
+          <Button size="icon" onClick={() => submit(input)} disabled={!input.trim() || isLoading || isRestoring} aria-label="Send message" className="h-11 w-11 rounded-2xl shadow-lg shadow-primary/20">
             <Send className="h-4 w-4" />
           </Button>
         </div>

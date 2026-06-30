@@ -1,17 +1,22 @@
 import { useEffect, useState } from 'react'
+import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { PanelLeft, ArrowLeft } from 'lucide-react'
+import { ArrowLeft, LogOut, FileText, MessageSquare, ScrollText, Sparkles } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 
 import { ClauseSidebar } from '@/components/ClauseSidebar'
 import { PDFViewer } from '@/components/PDFViewer'
 import { ChatInterface } from '@/components/ChatInterface'
+import { AnalysisPanel } from '@/components/AnalysisPanel'
 
-import { getClauses, getSuggestions, type Clause } from '@/services/document-service'
+import { getAnalysis, getClauses, getDocument, getSuggestions, type Clause, type DocumentAnalysis, type DocumentSummary } from '@/services/document-service'
 import type { Citation } from '@/services/chat-service'
+import type { User } from '@/services/auth-service'
+
+type MobilePanel = 'chat' | 'pdf' | 'info'
+type InfoPanel = 'analysis' | 'clauses'
 
 function ClauseSidebarSkeleton() {
   return (
@@ -49,21 +54,34 @@ function PDFSkeleton() {
   )
 }
 
-export default function DocumentPage() {
+interface DocumentPageProps {
+  user: User
+  onLogout: () => void
+}
+
+export default function DocumentPage({ user, onLogout }: DocumentPageProps) {
   const { id: documentId } = useParams<{ id: string }>()
   const navigate = useNavigate()
 
+  const [document, setDocument] = useState<DocumentSummary | null>(null)
+  const [analysis, setAnalysis] = useState<DocumentAnalysis | null>(null)
   const [clauses, setClauses] = useState<Clause[]>([])
   const [suggestions, setSuggestions] = useState<string[]>([])
   const [highlights, setHighlights] = useState<Citation[]>([])
   const [clausePage, setClausePage] = useState<number | undefined>(undefined)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [activeMobilePanel, setActiveMobilePanel] = useState<MobilePanel>('info')
+  const [activeInfoPanel, setActiveInfoPanel] = useState<InfoPanel>('analysis')
+  const [infoPanelWidth, setInfoPanelWidth] = useState(340)
+  const [chatPanelWidth, setChatPanelWidth] = useState(380)
 
   useEffect(() => {
     if (!documentId) return
-    Promise.all([getClauses(documentId), getSuggestions(documentId)])
-      .then(([cls, sgst]) => {
+    Promise.all([getDocument(documentId), getAnalysis(documentId), getClauses(documentId), getSuggestions(documentId)])
+      .then(([doc, analysisResult, cls, sgst]) => {
+        setDocument(doc)
+        setAnalysis(analysisResult)
         setClauses(cls)
         setSuggestions(sgst)
       })
@@ -108,55 +126,197 @@ export default function DocumentPage() {
             excerpt: clause.excerpt,
           },
         ])
-        setClausePage(undefined)
+        setClausePage(clause.pageNumber)
+        setActiveMobilePanel('pdf')
       }}
     />
   )
 
+  const chatPanel = loading ? (
+    <ChatSkeleton />
+  ) : (
+    <ChatInterface
+      documentId={documentId}
+      suggestions={suggestions}
+      onCitationClick={(c) => {
+        setHighlights([c])
+        setActiveMobilePanel('pdf')
+      }}
+    />
+  )
+
+  const pdfPanel = loading ? <PDFSkeleton /> : <PDFViewer documentId={documentId} highlights={highlights} targetPage={clausePage} />
+  const analysisPanel = <AnalysisPanel analysis={analysis} loading={loading} />
+  const infoPanel = (
+    <>
+      <div className="border-b border-border/70 p-2">
+        <div className="grid grid-cols-2 gap-2 rounded-2xl bg-muted/60 p-1">
+          {[
+            { id: 'analysis' as const, label: 'Analysis', icon: Sparkles },
+            { id: 'clauses' as const, label: 'Clauses', icon: ScrollText },
+          ].map((tab) => {
+            const Icon = tab.icon
+            const active = activeInfoPanel === tab.id
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveInfoPanel(tab.id)}
+                className={[
+                  'flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition',
+                  active ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
+                ].join(' ')}
+              >
+                <Icon className="h-3.5 w-3.5" />
+                {tab.label}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto">{activeInfoPanel === 'analysis' ? analysisPanel : clausePanel}</div>
+    </>
+  )
+
+  const startResize =
+    (target: 'info' | 'chat') =>
+    (event: ReactMouseEvent<HTMLDivElement>) => {
+      event.preventDefault()
+      const startX = event.clientX
+      const startWidth = target === 'info' ? infoPanelWidth : chatPanelWidth
+      const viewportWidth = window.innerWidth
+      const desktopPaddingAndGaps = 88
+      const minPdfWidth = 420
+      const minInfoWidth = 280
+      const minChatWidth = 320
+      const maxInfoWidth = Math.max(minInfoWidth, viewportWidth - chatPanelWidth - minPdfWidth - desktopPaddingAndGaps)
+      const maxChatWidth = Math.max(minChatWidth, viewportWidth - infoPanelWidth - minPdfWidth - desktopPaddingAndGaps)
+
+      const onMove = (moveEvent: MouseEvent) => {
+        const delta = moveEvent.clientX - startX
+        if (target === 'info') {
+          setInfoPanelWidth(Math.min(maxInfoWidth, Math.max(minInfoWidth, startWidth + delta)))
+        } else {
+          setChatPanelWidth(Math.min(maxChatWidth, Math.max(minChatWidth, startWidth - delta)))
+        }
+      }
+
+      const onUp = () => {
+        window.removeEventListener('mousemove', onMove)
+        window.removeEventListener('mouseup', onUp)
+        window.document.body.style.cursor = ''
+        window.document.body.style.userSelect = ''
+      }
+
+      window.document.body.style.cursor = 'col-resize'
+      window.document.body.style.userSelect = 'none'
+      window.addEventListener('mousemove', onMove)
+      window.addEventListener('mouseup', onUp)
+    }
+
+  const mobileTabs: Array<{ id: MobilePanel; label: string; icon: typeof MessageSquare }> = [
+    { id: 'chat', label: 'Chat', icon: MessageSquare },
+    { id: 'pdf', label: 'PDF', icon: FileText },
+    { id: 'info', label: 'Review', icon: Sparkles },
+  ]
+
   const mobileHeader = (
-    <header className="flex md:hidden items-center justify-between border-b px-4 py-2 shrink-0 bg-background">
-      <Button variant="ghost" size="icon" onClick={() => navigate('/')} aria-label="Back">
-        <ArrowLeft className="h-5 w-5" />
+    <header className="flex xl:hidden items-center justify-between border-b border-white/50 px-3 py-2 shrink-0 bg-card/80 backdrop-blur-xl">
+      <div className="flex min-w-0 items-center gap-2">
+        <Button variant="ghost" size="icon" onClick={() => navigate('/')} aria-label="Back" className="h-9 w-9">
+          <ArrowLeft className="h-5 w-5" />
+        </Button>
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold">{document?.name ?? 'SambidhanGPT'}</p>
+          <p className="text-[11px] text-muted-foreground">{document ? `${document.chunkCount} chunks · ${clauses.length} clauses` : 'Document workspace'}</p>
+        </div>
+      </div>
+      <Button variant="ghost" size="icon" onClick={onLogout} aria-label="Sign out" className="h-9 w-9">
+        <LogOut className="h-4 w-4" />
       </Button>
-      <span className="text-sm font-semibold tracking-tight">SambidhanGPT</span>
-      <Sheet>
-        <SheetTrigger asChild>
-          <Button variant="ghost" size="icon" aria-label="Open clauses panel">
-            <PanelLeft className="h-5 w-5" />
-          </Button>
-        </SheetTrigger>
-        <SheetContent side="left" className="w-72 p-0 overflow-y-auto">
-          <SheetHeader className="px-4 pt-4 pb-2">
-            <SheetTitle>Legal Clauses</SheetTitle>
-          </SheetHeader>
-          {clausePanel}
-        </SheetContent>
-      </Sheet>
     </header>
   )
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden bg-background">
+    <div className="flex h-dvh flex-col overflow-hidden bg-[radial-gradient(circle_at_top_left,_oklch(0.9_0.07_255)_0,_transparent_30rem),linear-gradient(135deg,_oklch(0.99_0.015_250),_oklch(0.95_0.035_210))]">
       {mobileHeader}
 
-      <div className="flex flex-1 overflow-hidden">
-        <aside className="hidden md:flex flex-col w-64 shrink-0 border-r overflow-y-auto bg-background">
-          <div className="flex items-center justify-between px-4 py-3 border-b">
-            <span className="text-sm font-semibold tracking-tight">Legal Clauses</span>
+      <header className="hidden xl:flex items-center justify-between border-b border-white/60 bg-card/75 px-5 py-3 backdrop-blur-xl shadow-sm">
+        <div className="flex min-w-0 items-center gap-3">
+          <Button variant="ghost" size="icon" onClick={() => navigate('/')} aria-label="Back">
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <div className="rounded-xl bg-primary/10 p-2 text-primary ring-1 ring-primary/10">
+            <FileText className="h-4 w-4" />
           </div>
-          {clausePanel}
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold">{document?.name ?? 'Document workspace'}</p>
+            <p className="text-xs text-muted-foreground">
+              {document ? `${document.chunkCount} chunks · ${document.clauseCount ?? clauses.length} clauses · ${suggestions.length} suggestions` : user.email}
+            </p>
+          </div>
+        </div>
+        <Button variant="outline" size="sm" onClick={onLogout}>
+          <LogOut className="mr-2 h-4 w-4" />
+          Sign out
+        </Button>
+      </header>
+
+      <nav className="grid w-full grid-cols-3 gap-2 border-b border-white/50 bg-card/70 px-3 py-2 backdrop-blur-xl xl:hidden">
+        {mobileTabs.map((tab) => {
+          const Icon = tab.icon
+          const active = activeMobilePanel === tab.id
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveMobilePanel(tab.id)}
+              className={[
+                'flex w-full items-center justify-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold transition',
+                active ? 'bg-primary text-primary-foreground shadow-md shadow-primary/20' : 'bg-background/70 text-muted-foreground hover:text-foreground',
+              ].join(' ')}
+            >
+              <Icon className="h-3.5 w-3.5" />
+              {tab.label}
+            </button>
+          )
+        })}
+      </nav>
+
+      <div className="flex min-h-0 flex-1 overflow-hidden xl:gap-2 xl:p-4">
+        <aside
+          className={[
+            activeMobilePanel === 'info' ? 'flex' : 'hidden',
+            'min-h-0 w-full flex-col overflow-hidden bg-card/85 backdrop-blur-xl xl:flex xl:w-[var(--info-panel-width)] xl:basis-[var(--info-panel-width)] xl:shrink-0 xl:rounded-2xl xl:border xl:border-white/60 xl:shadow-xl xl:shadow-slate-900/5',
+          ].join(' ')}
+          style={{ '--info-panel-width': `${infoPanelWidth}px` } as CSSProperties}
+        >
+          <div className="flex min-h-0 flex-1 flex-col">{infoPanel}</div>
         </aside>
 
-        <main className="flex flex-col flex-1 overflow-hidden order-last md:order-none">
-          {loading ? <PDFSkeleton /> : <PDFViewer documentId={documentId} highlights={highlights} targetPage={clausePage} />}
+        <div onMouseDown={startResize('info')} className="hidden w-3 shrink-0 cursor-col-resize items-center justify-center rounded-full hover:bg-primary/10 xl:flex" aria-hidden>
+          <div className="h-12 w-1 rounded-full bg-border" />
+        </div>
+
+        <main
+          className={[
+            activeMobilePanel === 'pdf' ? 'flex' : 'hidden',
+            'min-h-0 w-full flex-1 flex-col overflow-hidden bg-card/80 backdrop-blur-xl xl:flex xl:rounded-2xl xl:border xl:border-white/60 xl:shadow-xl xl:shadow-slate-900/5',
+          ].join(' ')}
+        >
+          {pdfPanel}
         </main>
 
-        <section className="flex flex-col w-full md:w-96 shrink-0 md:border-l overflow-hidden order-first md:order-none border-b md:border-b-0">
-          {loading ? (
-            <ChatSkeleton />
-          ) : (
-            <ChatInterface documentId={documentId} suggestions={suggestions} onCitationClick={(c) => setHighlights([c])} />
-          )}
+        <div onMouseDown={startResize('chat')} className="hidden w-3 shrink-0 cursor-col-resize items-center justify-center rounded-full hover:bg-primary/10 xl:flex" aria-hidden>
+          <div className="h-12 w-1 rounded-full bg-border" />
+        </div>
+
+        <section
+          className={[
+            activeMobilePanel === 'chat' ? 'flex' : 'hidden',
+            'min-h-0 w-full flex-col overflow-hidden bg-card/85 backdrop-blur-xl xl:flex xl:w-[var(--chat-panel-width)] xl:basis-[var(--chat-panel-width)] xl:shrink-0 xl:rounded-2xl xl:border xl:border-white/60 xl:shadow-xl xl:shadow-slate-900/5',
+          ].join(' ')}
+          style={{ '--chat-panel-width': `${chatPanelWidth}px` } as CSSProperties}
+        >
+          <div className="flex h-full min-h-0 flex-col">{chatPanel}</div>
         </section>
       </div>
     </div>
