@@ -66,6 +66,12 @@ function appendUserQuestionIfMissing(messages: ReadonlyArray<Message>, question:
   return [...messages, { role: 'user', content: question }]
 }
 
+function appendPendingUserQuestion(messages: ReadonlyArray<Message>, question: string | null): Message[] {
+  const trimmedQuestion = question?.trim() ?? ''
+  if (!trimmedQuestion || hasUserQuestion(messages, trimmedQuestion)) return [...messages]
+  return [...messages, { role: 'user', content: trimmedQuestion }]
+}
+
 function getInitialQuestionRequest({
   id,
   documentId,
@@ -206,12 +212,14 @@ export function ChatInterface({ documentId, suggestions, initialQuestion, initia
   const [isRestoring, setIsRestoring] = useState(true)
   const [isClearing, setIsClearing] = useState(false)
   const [selectedTextExpanded, setSelectedTextExpanded] = useState(false)
+  const [pendingInitialQuestion, setPendingInitialQuestion] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const handledInitialQuestionIdRef = useRef<string | null>(null)
   const activeSelectedText = selectedText?.trim() ? selectedText.trim() : null
   const isChatBusy = isLoading || isRestoring || isClearing
-  const canClearMessages = messages.length > 0 && !isChatBusy
+  const visibleMessages = appendPendingUserQuestion(messages, pendingInitialQuestion)
+  const canClearMessages = visibleMessages.length > 0 && !isChatBusy
 
   useEffect(() => {
     setIsRestoring(true)
@@ -279,16 +287,18 @@ export function ChatInterface({ documentId, suggestions, initialQuestion, initia
     if (handledInitialQuestionIdRef.current === trimmedQuestionId) return
     if (hasUserQuestion(messages, trimmedQuestion)) {
       handledInitialQuestionIdRef.current = trimmedQuestionId
+      setPendingInitialQuestion(null)
       return
     }
     if (hasSubmittedInitialQuestion(trimmedQuestionId) && !initialQuestionRequests.has(trimmedQuestionId)) {
       handledInitialQuestionIdRef.current = trimmedQuestionId
+      setPendingInitialQuestion(null)
       return
     }
     if (isLoading) return
 
     handledInitialQuestionIdRef.current = trimmedQuestionId
-    setMessages((prev) => appendUserQuestionIfMissing(prev, trimmedQuestion))
+    setPendingInitialQuestion(trimmedQuestion)
     setInput('')
     setIsLoading(true)
 
@@ -304,6 +314,7 @@ export function ChatInterface({ documentId, suggestions, initialQuestion, initia
           citations: res.citations,
         }
         setMessages((prev) => [...appendUserQuestionIfMissing(prev, trimmedQuestion), assistantMsg])
+        setPendingInitialQuestion(null)
       })
       .catch((err: unknown) => {
         const errMsg: AssistantMessage = {
@@ -313,6 +324,7 @@ export function ChatInterface({ documentId, suggestions, initialQuestion, initia
         }
         console.error('[ChatInterface] initial question failed:', err)
         setMessages((prev) => [...appendUserQuestionIfMissing(prev, trimmedQuestion), errMsg])
+        setPendingInitialQuestion(null)
       })
       .finally(() => setIsLoading(false))
   }, [documentId, initialQuestion, initialQuestionId, isClearing, isLoading, isRestoring, messages])
@@ -373,7 +385,7 @@ export function ChatInterface({ documentId, suggestions, initialQuestion, initia
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-3 py-4">
         {isRestoring && <p className="text-xs text-muted-foreground text-center mt-6">Restoring conversation...</p>}
 
-        {messages.length === 0 && !isLoading && !isRestoring && (
+        {visibleMessages.length === 0 && !isLoading && !isRestoring && (
           <>
             <p className="text-xs text-muted-foreground text-center mt-6 px-4">Ask any question about the uploaded document.</p>
             {suggestions.length > 0 && (
@@ -385,14 +397,14 @@ export function ChatInterface({ documentId, suggestions, initialQuestion, initia
           </>
         )}
 
-        {messages.length > 0 && suggestions.length > 0 && (
+        {visibleMessages.length > 0 && suggestions.length > 0 && (
           <div className="rounded-2xl border border-primary/10 bg-primary/5 py-2 shadow-sm">
             <p className="px-3 pb-2 text-xs font-medium text-muted-foreground">Suggested follow-ups</p>
             <SuggestionChips suggestions={suggestions.slice(0, 4)} onSelect={(q) => submit(q)} />
           </div>
         )}
 
-        {messages.map((msg, i) =>
+        {visibleMessages.map((msg, i) =>
           msg.role === 'user' ? (
             <UserBubble key={i} msg={msg} />
           ) : (
