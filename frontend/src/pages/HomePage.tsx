@@ -2,11 +2,13 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ChangeEvent, DragEvent, KeyboardEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
-import { Clock, LogOut, Upload, FileText, X } from 'lucide-react'
+import { Clock, LogOut, MessageSquare, Send, Upload, FileText, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
+import { Textarea } from '@/components/ui/textarea'
 import { listDocuments, uploadDocument, type DocumentSummary } from '@/services/document-service'
+import { resolveChatDocument } from '@/services/chat-service'
 import type { User } from '@/services/auth-service'
 
 function formatBytes(bytes: number): string {
@@ -24,6 +26,11 @@ function formatDate(input: string) {
   return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(input))
 }
 
+function createInitialQuestionId() {
+  if (typeof window.crypto.randomUUID === 'function') return window.crypto.randomUUID()
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
 export default function HomePage({ user, onLogout }: HomePageProps) {
   const navigate = useNavigate()
   const inputRef = useRef<HTMLInputElement>(null)
@@ -33,6 +40,8 @@ export default function HomePage({ user, onLogout }: HomePageProps) {
   const [progress, setProgress] = useState(0)
   const [documents, setDocuments] = useState<DocumentSummary[]>([])
   const [loadingDocuments, setLoadingDocuments] = useState(true)
+  const [homeQuestion, setHomeQuestion] = useState('')
+  const [resolvingQuestion, setResolvingQuestion] = useState(false)
 
   useEffect(() => {
     listDocuments()
@@ -90,6 +99,33 @@ export default function HomePage({ user, onLogout }: HomePageProps) {
       const message = err instanceof Error ? err.message : 'Upload failed. Please try again.'
       toast.error(message)
       setUploading(false)
+    }
+  }
+
+  const submitHomeQuestion = async () => {
+    const question = homeQuestion.trim()
+    if (!question || resolvingQuestion) return
+
+    setResolvingQuestion(true)
+    try {
+      const { documentId } = await resolveChatDocument(question)
+      navigate(`/document/${documentId}`, {
+        state: {
+          initialQuestion: question,
+          initialQuestionId: createInitialQuestionId(),
+        },
+      })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to find a relevant document.'
+      toast.error(message)
+      setResolvingQuestion(false)
+    }
+  }
+
+  const handleHomeQuestionKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      void submitHomeQuestion()
     }
   }
 
@@ -223,6 +259,34 @@ export default function HomePage({ user, onLogout }: HomePageProps) {
                 </Button>
               </CardContent>
             </Card>
+          </section>
+
+          <section className="lg:col-span-2">
+            <div className="mx-auto w-full max-w-4xl rounded-3xl border border-white/60 bg-card/85 p-3 shadow-2xl shadow-slate-900/10 backdrop-blur-xl">
+              <div className="flex items-end gap-2">
+                <div className="hidden h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/10 sm:flex">
+                  <MessageSquare className="h-5 w-5" />
+                </div>
+                <Textarea
+                  value={homeQuestion}
+                  onChange={(e) => setHomeQuestion(e.target.value)}
+                  onKeyDown={handleHomeQuestionKeyDown}
+                  placeholder="Ask across your documents..."
+                  rows={2}
+                  disabled={resolvingQuestion}
+                  className="min-h-14 flex-1 rounded-2xl border-border/80 bg-background/90 shadow-sm focus:ring-4 focus:ring-primary/10"
+                />
+                <Button
+                  size="icon"
+                  onClick={() => void submitHomeQuestion()}
+                  disabled={!homeQuestion.trim() || resolvingQuestion}
+                  aria-label="Send question"
+                  className="h-12 w-12 rounded-2xl shadow-lg shadow-primary/20"
+                >
+                  <Send className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
           </section>
         </div>
       </div>

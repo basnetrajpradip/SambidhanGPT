@@ -13,6 +13,10 @@ export interface ChatResponse {
   citations: Citation[]
 }
 
+export interface ResolveChatDocumentResponse {
+  documentId: string
+}
+
 export interface ConversationTurn {
   id: string
   documentId: string
@@ -60,6 +64,11 @@ export async function sendMessage(documentId: string, question: string, selected
     documentId,
     question: formatChatQuestion(question, selectedText),
   })
+  return response.data
+}
+
+export async function resolveChatDocument(question: string): Promise<ResolveChatDocumentResponse> {
+  const response = await api.post<ResolveChatDocumentResponse>('/chat/resolve-document', { question })
   return response.data
 }
 
