@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { Deck, Fragment, Slide, useReveal } from '@revealjs/react'
+import katex from 'katex'
 import 'reveal.js/reveal.css'
-import architectureFigure from './assets/report/system-architecture.png'
+import 'katex/dist/katex.min.css'
 import hnswFigure from './assets/report/hnsw-graph.png'
 import ragFigure from './assets/report/rag-pipeline.png'
-import sequenceFigure from './assets/report/qa-sequence.png'
 import './App.css'
 
 const revealConfig = Object.freeze({
@@ -22,11 +22,37 @@ const revealConfig = Object.freeze({
   scrollActivationWidth: 0,
 })
 
+const cosineFormulaMarkup = Object.freeze({
+  __html: katex.renderToString(
+    String.raw`\cos(q,d)=\frac{\mathbf{q}\cdot\mathbf{d}}{\lVert\mathbf{q}\rVert_2\,\lVert\mathbf{d}\rVert_2}`,
+    {
+      displayMode: true,
+      throwOnError: false,
+    },
+  ),
+})
+
 const problemPoints = Object.freeze([
-  ['Long documents', 'Legal PDFs are dense, formal, and slow to inspect manually.'],
-  ['Hallucination risk', 'General LLMs can invent clauses or legal references.'],
-  ['Weak trust signals', 'Answers without exact sources are hard to verify.'],
-  ['Document specificity', 'Users need answers from the PDF they uploaded.'],
+  {
+    title: 'Long documents',
+    detail: 'Legal PDFs are dense, formal, and slow to inspect manually.',
+    icon: 'document',
+  },
+  {
+    title: 'Hallucination risk',
+    detail: 'General LLMs can invent clauses or legal references.',
+    icon: 'warning',
+  },
+  {
+    title: 'Weak trust signals',
+    detail: 'Answers without exact sources are hard to verify.',
+    icon: 'shield',
+  },
+  {
+    title: 'Document specificity',
+    detail: 'Users need answers from the PDF they uploaded.',
+    icon: 'target',
+  },
 ])
 
 const objectives = Object.freeze([
@@ -34,6 +60,13 @@ const objectives = Object.freeze([
   'Exact PDF citation highlighting',
   'Clause extraction, suggested questions, and document analysis',
   'Real-world application of CSIT algorithms',
+])
+
+const processSteps = Object.freeze([
+  { label: 'Upload PDF', icon: 'upload' },
+  { label: 'Retrieve evidence', icon: 'retrieve' },
+  { label: 'Generate answer', icon: 'generate' },
+  { label: 'Highlight source', icon: 'highlight' },
 ])
 
 const ragSteps = Object.freeze([
@@ -65,11 +98,31 @@ const ragSteps = Object.freeze([
 ])
 
 const stackGroups = Object.freeze([
-  ['Frontend', 'React 19', 'Vite', 'Tailwind', 'react-pdf/pdfjs'],
-  ['Backend', 'Express 5', 'TypeScript', 'Agent modules'],
-  ['Data', 'PostgreSQL', 'pgvector', 'Drizzle ORM'],
-  ['AI', 'Gemini 2.5 Flash', 'gemini-embedding-001'],
-  ['Security', 'PBKDF2', 'HMAC', 'User isolation'],
+  {
+    group: 'Frontend',
+    icon: 'frontend',
+    items: ['React 19', 'Vite', 'Tailwind', 'react-pdf/pdfjs'],
+  },
+  {
+    group: 'Backend',
+    icon: 'backend',
+    items: ['Express 5', 'TypeScript', 'Agent modules'],
+  },
+  {
+    group: 'Data',
+    icon: 'data',
+    items: ['PostgreSQL', 'pgvector', 'Drizzle ORM'],
+  },
+  {
+    group: 'AI',
+    icon: 'ai',
+    items: ['Gemini 2.5 Flash', 'gemini-embedding-001'],
+  },
+  {
+    group: 'Security',
+    icon: 'security',
+    items: ['PBKDF2', 'HMAC', 'User isolation'],
+  },
 ])
 
 const verificationItems = Object.freeze([
@@ -78,6 +131,50 @@ const verificationItems = Object.freeze([
   'Unanswerable questions are refused',
   'Citation clicks scroll and highlight',
   'User isolation works',
+])
+
+const presentationModules = Object.freeze([
+  'PDF Viewer',
+  'Chat Interface',
+  'Clause Sidebar',
+  'Analysis Panel',
+  'Suggestion Chips',
+])
+
+const agentModules = Object.freeze([
+  'Ingestion Agent',
+  'RAG Agent',
+  'Clause Agent',
+  'Suggestion Agent',
+  'Analysis Agent',
+])
+
+const userFlowSteps = Object.freeze([
+  {
+    title: 'Authenticate',
+    detail: 'Bearer token scopes the workspace',
+    icon: 'auth',
+  },
+  {
+    title: 'Upload PDF',
+    detail: 'Pages become source-aware text',
+    icon: 'upload',
+  },
+  {
+    title: 'Ask',
+    detail: 'Question becomes an embedding',
+    icon: 'question',
+  },
+  {
+    title: 'Answer',
+    detail: 'Gemini uses retrieved evidence',
+    icon: 'answer',
+  },
+  {
+    title: 'Inspect',
+    detail: 'Citation scrolls to highlighted text',
+    icon: 'highlight',
+  },
 ])
 
 function JumpButton({ target, children, tone = 'primary' }) {
@@ -102,6 +199,302 @@ function SectionHeader({ eyebrow, title, lead }) {
       <h2>{title}</h2>
       {lead ? <p className="lead">{lead}</p> : null}
     </header>
+  )
+}
+
+function StatusIcon() {
+  return (
+    <svg className="status-icon" aria-hidden="true" viewBox="0 0 64 64">
+      <circle cx="32" cy="32" r="22" />
+      <path d="M21 33l8 8 15-18" />
+    </svg>
+  )
+}
+
+function ProblemIcon({ type }) {
+  if (type === 'document') {
+    return (
+      <svg aria-hidden="true" viewBox="0 0 64 64">
+        <path d="M19 10h21l8 8v36H19z" />
+        <path d="M40 10v10h10" />
+        <path d="M26 28h16" />
+        <path d="M26 36h16" />
+        <path d="M26 44h11" />
+      </svg>
+    )
+  }
+
+  if (type === 'warning') {
+    return (
+      <svg aria-hidden="true" viewBox="0 0 64 64">
+        <path d="M32 12l22 40H10z" />
+        <path d="M32 25v13" />
+        <path d="M32 46h.01" />
+      </svg>
+    )
+  }
+
+  if (type === 'shield') {
+    return (
+      <svg aria-hidden="true" viewBox="0 0 64 64">
+        <path d="M32 9l19 8v14c0 13-8 22-19 26-11-4-19-13-19-26V17z" />
+        <path d="M23 32l6 6 13-14" />
+      </svg>
+    )
+  }
+
+  if (type === 'target') {
+    return (
+      <svg aria-hidden="true" viewBox="0 0 64 64">
+        <circle cx="32" cy="32" r="22" />
+        <circle cx="32" cy="32" r="12" />
+        <circle cx="32" cy="32" r="3" />
+        <path d="M32 6v8" />
+        <path d="M32 50v8" />
+        <path d="M6 32h8" />
+        <path d="M50 32h8" />
+      </svg>
+    )
+  }
+
+  return null
+}
+
+function ProcessIcon({ type }) {
+  if (type === 'upload') {
+    return (
+      <svg className="process-icon" aria-hidden="true" viewBox="0 0 64 64">
+        <path d="M18 10h22l8 8v36H18z" />
+        <path d="M40 10v10h10" />
+        <path d="M32 42V24" />
+        <path d="M24 32l8-8 8 8" />
+      </svg>
+    )
+  }
+
+  if (type === 'retrieve') {
+    return (
+      <svg className="process-icon" aria-hidden="true" viewBox="0 0 64 64">
+        <path d="M16 12h28v24H16z" />
+        <path d="M22 20h16" />
+        <path d="M22 28h10" />
+        <circle cx="41" cy="41" r="9" />
+        <path d="M48 48l7 7" />
+      </svg>
+    )
+  }
+
+  if (type === 'generate') {
+    return (
+      <svg className="process-icon" aria-hidden="true" viewBox="0 0 64 64">
+        <path d="M14 16h30a8 8 0 0 1 8 8v10a8 8 0 0 1-8 8H30l-12 9v-9h-4z" />
+        <path d="M43 10l2 6 6 2-6 2-2 6-2-6-6-2 6-2z" />
+        <path d="M24 27h16" />
+        <path d="M24 34h10" />
+      </svg>
+    )
+  }
+
+  if (type === 'highlight') {
+    return (
+      <svg className="process-icon" aria-hidden="true" viewBox="0 0 64 64">
+        <path d="M17 12h30v40H17z" />
+        <path d="M24 22h16" />
+        <path d="M24 30h12" />
+        <rect className="process-icon-fill" x="22" y="37" width="20" height="10" rx="2" />
+        <path d="M24 42h16" />
+      </svg>
+    )
+  }
+
+  return null
+}
+
+function StackIcon({ type }) {
+  if (type === 'frontend') {
+    return (
+      <svg className="stack-icon" aria-hidden="true" viewBox="0 0 64 64">
+        <rect x="10" y="14" width="44" height="30" rx="4" />
+        <path d="M24 52h16" />
+        <path d="M32 44v8" />
+        <path d="M25 27l-6 5 6 5" />
+        <path d="M39 27l6 5-6 5" />
+      </svg>
+    )
+  }
+
+  if (type === 'backend') {
+    return (
+      <svg className="stack-icon" aria-hidden="true" viewBox="0 0 64 64">
+        <rect x="12" y="12" width="40" height="12" rx="3" />
+        <rect x="12" y="28" width="40" height="12" rx="3" />
+        <rect x="12" y="44" width="40" height="8" rx="3" />
+        <path d="M20 18h.01" />
+        <path d="M20 34h.01" />
+        <path d="M20 48h.01" />
+      </svg>
+    )
+  }
+
+  if (type === 'data') {
+    return (
+      <svg className="stack-icon" aria-hidden="true" viewBox="0 0 64 64">
+        <ellipse cx="32" cy="16" rx="20" ry="8" />
+        <path d="M12 16v24c0 4 9 8 20 8s20-4 20-8V16" />
+        <path d="M12 28c0 4 9 8 20 8s20-4 20-8" />
+      </svg>
+    )
+  }
+
+  if (type === 'ai') {
+    return (
+      <svg className="stack-icon" aria-hidden="true" viewBox="0 0 64 64">
+        <path d="M32 10l3 11 11 3-11 3-3 11-3-11-11-3 11-3z" />
+        <path d="M48 36l2 7 7 2-7 2-2 7-2-7-7-2 7-2z" />
+        <path d="M18 40l1.5 5 5 1.5-5 1.5-1.5 5-1.5-5-5-1.5 5-1.5z" />
+      </svg>
+    )
+  }
+
+  if (type === 'security') {
+    return (
+      <svg className="stack-icon" aria-hidden="true" viewBox="0 0 64 64">
+        <path d="M32 9l19 8v14c0 13-8 22-19 26-11-4-19-13-19-26V17z" />
+        <path d="M24 33h16" />
+        <path d="M28 33v-5a4 4 0 0 1 8 0v5" />
+        <rect x="25" y="33" width="14" height="12" rx="2" />
+      </svg>
+    )
+  }
+
+  return null
+}
+
+function FlowIcon({ type }) {
+  if (type === 'auth') {
+    return (
+      <svg aria-hidden="true" viewBox="0 0 64 64">
+        <circle cx="25" cy="24" r="8" />
+        <path d="M13 50c2-10 8-15 18-15" />
+        <path d="M38 35l13-13" />
+        <path d="M45 22h8v8" />
+      </svg>
+    )
+  }
+
+  if (type === 'question') {
+    return (
+      <svg aria-hidden="true" viewBox="0 0 64 64">
+        <path d="M14 16h36v26H28l-10 8v-8h-4z" />
+        <path d="M29 25a6 6 0 1 1 7 6c-3 1-4 3-4 6" />
+        <path d="M32 44h.01" />
+      </svg>
+    )
+  }
+
+  if (type === 'answer') {
+    return (
+      <svg aria-hidden="true" viewBox="0 0 64 64">
+        <path d="M14 17h36v30H14z" />
+        <path d="M22 27h20" />
+        <path d="M22 36h12" />
+        <path d="M43 10l2 6 6 2-6 2-2 6-2-6-6-2 6-2z" />
+      </svg>
+    )
+  }
+
+  return <ProcessIcon type={type} />
+}
+
+function LatexFormula() {
+  return (
+    <div
+      className="formula"
+      aria-label="cosine similarity equals q dot d divided by the product of the L2 norms of q and d"
+      dangerouslySetInnerHTML={cosineFormulaMarkup}
+    />
+  )
+}
+
+function UserFlowDiagram() {
+  return (
+    <div className="flow-diagram" aria-label="Authenticated question answering workflow">
+      {userFlowSteps.map((step, index) => (
+        <article className="flow-card" key={step.title}>
+          <span className="flow-step-number">{String(index + 1).padStart(2, '0')}</span>
+          <span className="flow-icon">
+            <FlowIcon type={step.icon} />
+          </span>
+          <h3>{step.title}</h3>
+          <p>{step.detail}</p>
+        </article>
+      ))}
+    </div>
+  )
+}
+
+function ArchitectureDiagram() {
+  return (
+    <div className="architecture-diagram" aria-label="System architecture of SambidhanGPT">
+      <div className="architecture-map">
+        <article className="architecture-tier presentation-tier">
+          <div className="architecture-heading">
+            <span>Presentation Layer</span>
+            <strong>React + Vite</strong>
+          </div>
+          <div className="architecture-node-list">
+            {presentationModules.map((module) => (
+              <div className="architecture-node" key={module}>{module}</div>
+            ))}
+          </div>
+        </article>
+
+        <div className="architecture-connector" aria-hidden="true">
+          <span>REST / axios<br />JSON over HTTPS</span>
+        </div>
+
+        <article className="architecture-tier application-tier">
+          <div className="architecture-heading">
+            <span>Application Layer</span>
+            <strong>Express.js + TypeScript</strong>
+          </div>
+          <div className="application-flow">
+            <div className="architecture-node">
+              Auth Middleware
+              <span>Bearer token</span>
+            </div>
+            <div className="architecture-node">Routes &amp; Controllers</div>
+            <div className="agent-layer">
+              <p>Agent Layer</p>
+              <div>
+                {agentModules.map((module) => (
+                  <span key={module}>{module}</span>
+                ))}
+              </div>
+            </div>
+            <div className="architecture-node">Drizzle ORM</div>
+          </div>
+        </article>
+
+        <div className="architecture-connector architecture-connector-service" aria-hidden="true">
+          <span>embed / generate<br />vector search</span>
+        </div>
+
+        <div className="architecture-services">
+          <article className="service-card data-service">
+            <span>Data Layer</span>
+            <strong>PostgreSQL + pgvector</strong>
+            <p>HNSW halfvec cosine index</p>
+          </article>
+          <article className="service-card gemini-service">
+            <span>Google Gemini</span>
+            <strong>2.5 Flash</strong>
+            <p>embedding-001</p>
+          </article>
+        </div>
+      </div>
+      <JumpButton target={6} tone="secondary">Open RAG pipeline</JumpButton>
+    </div>
   )
 }
 
@@ -146,14 +539,14 @@ function App() {
               lead="The project starts from a trust problem, not just an automation problem."
             />
             <div className="problem-grid">
-              {problemPoints.map(([title, detail]) => (
-                <Fragment animation="fade-up" asChild key={title}>
-                  <article className="problem-card">
-                    <span className="problem-mark">{title.slice(0, 2).toUpperCase()}</span>
-                    <h3>{title}</h3>
-                    <p>{detail}</p>
-                  </article>
-                </Fragment>
+              {problemPoints.map(({ title, detail, icon }) => (
+                <article className="problem-card" key={title}>
+                  <span className="problem-mark">
+                    <ProblemIcon type={icon} />
+                  </span>
+                  <h3>{title}</h3>
+                  <p>{detail}</p>
+                </article>
               ))}
             </div>
           </div>
@@ -167,16 +560,19 @@ function App() {
               lead="SambidhanGPT keeps generation grounded by making source evidence part of the workflow."
             />
             <div className="process-strip">
-              {['Upload PDF', 'Retrieve evidence', 'Generate answer', 'Highlight source'].map(
-                (step, index) => (
-                  <Fragment animation="fade-up" asChild key={step}>
-                    <div className="process-step">
-                      <span>{String(index + 1).padStart(2, '0')}</span>
-                      <strong>{step}</strong>
+              {processSteps.map((step, index) => (
+                <Fragment animation="fade-up" asChild key={step.label}>
+                  <div className="process-step">
+                    <div className="process-step-top">
+                      <span className="process-step-index">
+                        {String(index + 1).padStart(2, '0')}
+                      </span>
+                      <ProcessIcon type={step.icon} />
                     </div>
-                  </Fragment>
-                ),
-              )}
+                    <strong>{step.label}</strong>
+                  </div>
+                </Fragment>
+              ))}
               <div className="process-glow" aria-hidden="true"></div>
             </div>
             <div className="thesis-panel">
@@ -195,12 +591,12 @@ function App() {
             />
             <div className="checklist-grid">
               {objectives.map((objective) => (
-                <Fragment animation="fade-up" asChild key={objective}>
-                  <div className="check-item">
-                    <span aria-hidden="true">OK</span>
-                    <p>{objective}</p>
-                  </div>
-                </Fragment>
+                <div className="check-item" key={objective}>
+                  <span aria-hidden="true">
+                    <StatusIcon />
+                  </span>
+                  <p>{objective}</p>
+                </div>
               ))}
             </div>
           </div>
@@ -214,21 +610,7 @@ function App() {
               lead="React/Vite presents the workspace, Express/TypeScript coordinates agents, and PostgreSQL + Gemini provide evidence and generation."
             />
             <div className="architecture-layout">
-              <figure className="figure-frame tall-figure">
-                <img src={architectureFigure} alt="System architecture of SambidhanGPT" />
-              </figure>
-              <div className="architecture-labels">
-                <Fragment animation="fade-up" asChild>
-                  <p><strong>Frontend</strong><span>PDF viewer, chat, clauses, analysis</span></p>
-                </Fragment>
-                <Fragment animation="fade-up" asChild>
-                  <p><strong>Backend agents</strong><span>Auth, ingestion, RAG, clauses, suggestions</span></p>
-                </Fragment>
-                <Fragment animation="fade-up" asChild>
-                  <p><strong>Data + Gemini</strong><span>pgvector retrieval, embeddings, generation</span></p>
-                </Fragment>
-                <JumpButton target={6} tone="secondary">Open RAG pipeline</JumpButton>
-              </div>
+              <ArchitectureDiagram />
             </div>
           </div>
         </Slide>
@@ -241,15 +623,11 @@ function App() {
               lead="The interaction remains simple while the system keeps ownership, evidence, and citation mapping intact."
             />
             <div className="flow-layout">
-              <figure className="figure-frame wide-figure">
-                <img src={sequenceFigure} alt="Question-answering sequence diagram" />
-              </figure>
+              <UserFlowDiagram />
               <div className="flow-list">
                 {['Register or log in', 'Upload PDF', 'Ask questions', 'Inspect cited answer', 'Browse clauses, suggestions, and analysis'].map(
                   (item) => (
-                    <Fragment animation="fade-up" asChild key={item}>
-                      <p>{item}</p>
-                    </Fragment>
+                    <p key={item}>{item}</p>
                   ),
                 )}
               </div>
@@ -304,11 +682,11 @@ function App() {
             <div className="retrieval-layout">
               <div className="formula-panel">
                 <p className="formula-label">cosine similarity</p>
-                <div className="formula">q . d / (||q|| * ||d||)</div>
+                <LatexFormula />
                 <ul>
-                  <Fragment animation="fade-up" asChild><li>3072-dimensional embeddings</li></Fragment>
-                  <Fragment animation="fade-up" asChild><li>Smallest cosine distance gives top chunks</li></Fragment>
-                  <Fragment animation="fade-up" asChild><li><code>halfvec_cosine_ops</code> keeps pgvector search responsive</li></Fragment>
+                  <li>3072-dimensional embeddings</li>
+                  <li>Smallest cosine distance gives top chunks</li>
+                  <li><code>halfvec_cosine_ops</code> keeps pgvector search responsive</li>
                 </ul>
               </div>
               <figure className="figure-frame hnsw-figure">
@@ -381,13 +759,14 @@ function App() {
               title="A self-hostable legal RAG stack"
             />
             <div className="stack-grid">
-              {stackGroups.map(([group, ...items]) => (
-                <Fragment animation="fade-up" asChild key={group}>
-                  <article className="stack-tile">
+              {stackGroups.map(({ group, icon, items }) => (
+                <article className="stack-tile" key={group}>
+                  <div className="stack-tile-top">
+                    <StackIcon type={icon} />
                     <h3>{group}</h3>
-                    <p>{items.join(' / ')}</p>
-                  </article>
-                </Fragment>
+                  </div>
+                  <p>{items.join(' / ')}</p>
+                </article>
               ))}
             </div>
           </div>
@@ -403,9 +782,7 @@ function App() {
             <div className="results-layout">
               <div className="results-list">
                 {verificationItems.map((item) => (
-                  <Fragment animation="fade-up" asChild key={item}>
-                    <p><span aria-hidden="true">OK</span>{item}</p>
-                  </Fragment>
+                  <p key={item}><span aria-hidden="true"><StatusIcon /></span>{item}</p>
                 ))}
               </div>
               <div className="result-statement">
