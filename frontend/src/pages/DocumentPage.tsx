@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, LogOut, FileText, MessageSquare, ScrollText, Sparkles } from 'lucide-react'
+import { ArrowLeft, LogOut, FileText, MessageSquare, PanelLeftClose, PanelLeftOpen, PanelRightOpen, ScrollText, Sparkles } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -76,6 +76,9 @@ export default function DocumentPage({ user, onLogout }: DocumentPageProps) {
   const [activeInfoPanel, setActiveInfoPanel] = useState<InfoPanel>('analysis')
   const [infoPanelWidth, setInfoPanelWidth] = useState(340)
   const [chatPanelWidth, setChatPanelWidth] = useState(380)
+  const [isInfoCollapsed, setIsInfoCollapsed] = useState(false)
+  const [isChatCollapsed, setIsChatCollapsed] = useState(false)
+  const [isPdfFullscreen, setIsPdfFullscreen] = useState(false)
 
   useEffect(() => {
     if (!documentId) return
@@ -145,6 +148,7 @@ export default function DocumentPage({ user, onLogout }: DocumentPageProps) {
       suggestions={suggestions}
       selectedText={selectedPdfText}
       onClearSelectedText={() => setSelectedPdfText(null)}
+      onCollapse={() => setIsChatCollapsed(true)}
       onCitationClick={(c) => {
         setHighlights([c])
         setActiveMobilePanel('pdf')
@@ -159,8 +163,14 @@ export default function DocumentPage({ user, onLogout }: DocumentPageProps) {
       documentId={documentId}
       highlights={highlights}
       targetPage={clausePage}
+      isFullscreen={isPdfFullscreen}
+      onToggleFullscreen={() => {
+        setIsPdfFullscreen((value) => !value)
+        setActiveMobilePanel('pdf')
+      }}
       onAskSelection={(text) => {
         setSelectedPdfText(text)
+        setIsPdfFullscreen(false)
         setActiveMobilePanel('chat')
       }}
     />
@@ -169,27 +179,32 @@ export default function DocumentPage({ user, onLogout }: DocumentPageProps) {
   const infoPanel = (
     <>
       <div className="border-b border-border/70 p-2">
-        <div className="grid grid-cols-2 gap-2 rounded-2xl bg-muted/60 p-1">
-          {[
-            { id: 'analysis' as const, label: 'Analysis', icon: Sparkles },
-            { id: 'clauses' as const, label: 'Clauses', icon: ScrollText },
-          ].map((tab) => {
-            const Icon = tab.icon
-            const active = activeInfoPanel === tab.id
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveInfoPanel(tab.id)}
-                className={[
-                  'flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition',
-                  active ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
-                ].join(' ')}
-              >
-                <Icon className="h-3.5 w-3.5" />
-                {tab.label}
-              </button>
-            )
-          })}
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="icon" onClick={() => setIsInfoCollapsed(true)} aria-label="Collapse review panel" className="hidden h-9 w-9 shrink-0 rounded-xl text-muted-foreground hover:text-foreground xl:inline-flex">
+            <PanelLeftClose className="h-4 w-4" />
+          </Button>
+          <div className="grid flex-1 grid-cols-2 gap-2 rounded-2xl bg-muted/60 p-1">
+            {[
+              { id: 'analysis' as const, label: 'Analysis', icon: Sparkles },
+              { id: 'clauses' as const, label: 'Clauses', icon: ScrollText },
+            ].map((tab) => {
+              const Icon = tab.icon
+              const active = activeInfoPanel === tab.id
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveInfoPanel(tab.id)}
+                  className={[
+                    'flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition',
+                    active ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
+                  ].join(' ')}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  {tab.label}
+                </button>
+              )
+            })}
+          </div>
         </div>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">{activeInfoPanel === 'analysis' ? analysisPanel : clausePanel}</div>
@@ -207,8 +222,11 @@ export default function DocumentPage({ user, onLogout }: DocumentPageProps) {
       const minPdfWidth = 420
       const minInfoWidth = 280
       const minChatWidth = 320
-      const maxInfoWidth = Math.max(minInfoWidth, viewportWidth - chatPanelWidth - minPdfWidth - desktopPaddingAndGaps)
-      const maxChatWidth = Math.max(minChatWidth, viewportWidth - infoPanelWidth - minPdfWidth - desktopPaddingAndGaps)
+      const collapsedPanelWidth = 56
+      const rightPanelWidth = isChatCollapsed ? collapsedPanelWidth : chatPanelWidth
+      const leftPanelWidth = isInfoCollapsed ? collapsedPanelWidth : infoPanelWidth
+      const maxInfoWidth = Math.max(minInfoWidth, viewportWidth - rightPanelWidth - minPdfWidth - desktopPaddingAndGaps)
+      const maxChatWidth = Math.max(minChatWidth, viewportWidth - leftPanelWidth - minPdfWidth - desktopPaddingAndGaps)
 
       const onMove = (moveEvent: MouseEvent) => {
         const delta = moveEvent.clientX - startX
@@ -287,7 +305,10 @@ export default function DocumentPage({ user, onLogout }: DocumentPageProps) {
           return (
             <button
               key={tab.id}
-              onClick={() => setActiveMobilePanel(tab.id)}
+              onClick={() => {
+                setActiveMobilePanel(tab.id)
+                if (tab.id !== 'pdf') setIsPdfFullscreen(false)
+              }}
               className={[
                 'flex w-full items-center justify-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold transition',
                 active ? 'bg-primary text-primary-foreground shadow-md shadow-primary/20' : 'bg-background/70 text-muted-foreground hover:text-foreground',
@@ -301,42 +322,80 @@ export default function DocumentPage({ user, onLogout }: DocumentPageProps) {
       </nav>
 
       <div className="flex min-h-0 flex-1 overflow-hidden xl:gap-2 xl:p-4">
-        <aside
-          className={[
-            activeMobilePanel === 'info' ? 'flex' : 'hidden',
-            'min-h-0 w-full flex-col overflow-hidden bg-card/85 backdrop-blur-xl xl:flex xl:w-[var(--info-panel-width)] xl:basis-[var(--info-panel-width)] xl:shrink-0 xl:rounded-2xl xl:border xl:border-white/60 xl:shadow-xl xl:shadow-slate-900/5',
-          ].join(' ')}
-          style={{ '--info-panel-width': `${infoPanelWidth}px` } as CSSProperties}
-        >
-          <div className="flex min-h-0 flex-1 flex-col">{infoPanel}</div>
-        </aside>
+        {!isPdfFullscreen && (
+          <aside
+            className={[
+              activeMobilePanel === 'info' ? 'flex' : 'hidden',
+              'min-h-0 w-full flex-col overflow-hidden bg-card/85 backdrop-blur-xl xl:flex xl:shrink-0 xl:rounded-2xl xl:border xl:border-white/60 xl:shadow-xl xl:shadow-slate-900/5',
+              isInfoCollapsed ? 'xl:w-14 xl:basis-14' : 'xl:w-[var(--info-panel-width)] xl:basis-[var(--info-panel-width)]',
+            ].join(' ')}
+            style={{ '--info-panel-width': `${infoPanelWidth}px` } as CSSProperties}
+          >
+            {isInfoCollapsed ? (
+              <>
+                <div className="flex min-h-0 flex-1 flex-col xl:hidden">{infoPanel}</div>
+                <div className="hidden h-full flex-col items-center gap-3 px-2 py-3 xl:flex">
+                  <Button variant="ghost" size="icon" onClick={() => setIsInfoCollapsed(false)} aria-label="Expand review panel" className="h-9 w-9 rounded-xl text-muted-foreground hover:text-foreground">
+                    <PanelLeftOpen className="h-4 w-4" />
+                  </Button>
+                  <div className="rounded-xl bg-primary/10 p-2 text-primary">
+                    <Sparkles className="h-4 w-4" />
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="flex min-h-0 flex-1 flex-col">{infoPanel}</div>
+            )}
+          </aside>
+        )}
 
-        <div onMouseDown={startResize('info')} className="hidden w-3 shrink-0 cursor-col-resize items-center justify-center rounded-full hover:bg-primary/10 xl:flex" aria-hidden>
-          <div className="h-12 w-1 rounded-full bg-border" />
-        </div>
+        {!isPdfFullscreen && !isInfoCollapsed && (
+          <div onMouseDown={startResize('info')} className="hidden w-3 shrink-0 cursor-col-resize items-center justify-center rounded-full hover:bg-primary/10 xl:flex" aria-hidden>
+            <div className="h-12 w-1 rounded-full bg-border" />
+          </div>
+        )}
 
         <main
           className={[
-            activeMobilePanel === 'pdf' ? 'flex' : 'hidden',
+            activeMobilePanel === 'pdf' || isPdfFullscreen ? 'flex' : 'hidden',
             'min-h-0 w-full flex-1 flex-col overflow-hidden bg-card/80 backdrop-blur-xl xl:flex xl:rounded-2xl xl:border xl:border-white/60 xl:shadow-xl xl:shadow-slate-900/5',
           ].join(' ')}
         >
           {pdfPanel}
         </main>
 
-        <div onMouseDown={startResize('chat')} className="hidden w-3 shrink-0 cursor-col-resize items-center justify-center rounded-full hover:bg-primary/10 xl:flex" aria-hidden>
-          <div className="h-12 w-1 rounded-full bg-border" />
-        </div>
+        {!isPdfFullscreen && !isChatCollapsed && (
+          <div onMouseDown={startResize('chat')} className="hidden w-3 shrink-0 cursor-col-resize items-center justify-center rounded-full hover:bg-primary/10 xl:flex" aria-hidden>
+            <div className="h-12 w-1 rounded-full bg-border" />
+          </div>
+        )}
 
-        <section
-          className={[
-            activeMobilePanel === 'chat' ? 'flex' : 'hidden',
-            'min-h-0 w-full flex-col overflow-hidden bg-card/85 backdrop-blur-xl xl:flex xl:w-[var(--chat-panel-width)] xl:basis-[var(--chat-panel-width)] xl:shrink-0 xl:rounded-2xl xl:border xl:border-white/60 xl:shadow-xl xl:shadow-slate-900/5',
-          ].join(' ')}
-          style={{ '--chat-panel-width': `${chatPanelWidth}px` } as CSSProperties}
-        >
-          <div className="flex h-full min-h-0 flex-col">{chatPanel}</div>
-        </section>
+        {!isPdfFullscreen && (
+          <section
+            className={[
+              activeMobilePanel === 'chat' ? 'flex' : 'hidden',
+              'min-h-0 w-full flex-col overflow-hidden bg-card/85 backdrop-blur-xl xl:flex xl:shrink-0 xl:rounded-2xl xl:border xl:border-white/60 xl:shadow-xl xl:shadow-slate-900/5',
+              isChatCollapsed ? 'xl:w-14 xl:basis-14' : 'xl:w-[var(--chat-panel-width)] xl:basis-[var(--chat-panel-width)]',
+            ].join(' ')}
+            style={{ '--chat-panel-width': `${chatPanelWidth}px` } as CSSProperties}
+          >
+            {isChatCollapsed ? (
+              <>
+                <div className="flex h-full min-h-0 flex-col xl:hidden">{chatPanel}</div>
+                <div className="hidden h-full flex-col items-center gap-3 px-2 py-3 xl:flex">
+                  <Button variant="ghost" size="icon" onClick={() => setIsChatCollapsed(false)} aria-label="Expand chat" className="h-9 w-9 rounded-xl text-muted-foreground hover:text-foreground">
+                    <PanelRightOpen className="h-4 w-4" />
+                  </Button>
+                  <div className="rounded-xl bg-primary/10 p-2 text-primary">
+                    <MessageSquare className="h-4 w-4" />
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="flex h-full min-h-0 flex-col">{chatPanel}</div>
+            )}
+          </section>
+        )}
       </div>
     </div>
   )

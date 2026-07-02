@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
-import { ChevronDown, Quote, Send, X } from 'lucide-react'
+import { ChevronDown, PanelRightClose, Quote, Send, X } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -28,6 +28,7 @@ export interface ChatInterfaceProps {
   onCitationClick?: (citation: Citation) => void
   selectedText?: string | null
   onClearSelectedText?: () => void
+  onCollapse?: () => void
 }
 
 const SELECTED_TEXT_PREVIEW_LIMIT = 100
@@ -138,7 +139,7 @@ function AssistantBubble({ msg, onCitationClick }: { msg: AssistantMessage; onCi
 
 // ── ChatInterface ────────────────────────────────────────────────────────
 
-export function ChatInterface({ documentId, suggestions, onCitationClick, selectedText, onClearSelectedText }: ChatInterfaceProps) {
+export function ChatInterface({ documentId, suggestions, onCitationClick, selectedText, onClearSelectedText, onCollapse }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -216,9 +217,16 @@ export function ChatInterface({ documentId, suggestions, onCitationClick, select
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <div className="border-b border-border/70 bg-card/60 px-4 py-3 shrink-0 backdrop-blur">
-        <p className="text-sm font-semibold tracking-tight">Ask a question</p>
-        <p className="text-xs text-muted-foreground">Your conversation is saved to this document.</p>
+      <div className="flex items-start justify-between gap-2 border-b border-border/70 bg-card/60 px-4 py-3 shrink-0 backdrop-blur">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold tracking-tight">Ask a question</p>
+          <p className="text-xs text-muted-foreground">Your conversation is saved to this document.</p>
+        </div>
+        {onCollapse && (
+          <Button variant="ghost" size="icon" onClick={onCollapse} aria-label="Collapse chat" className="hidden h-8 w-8 shrink-0 rounded-xl text-muted-foreground hover:text-foreground xl:inline-flex">
+            <PanelRightClose className="h-4 w-4" />
+          </Button>
+        )}
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-3 py-4">

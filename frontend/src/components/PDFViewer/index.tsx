@@ -5,7 +5,7 @@ import type { PDFDocumentProxy } from 'pdfjs-dist'
 import 'react-pdf/dist/Page/AnnotationLayer.css'
 import 'react-pdf/dist/Page/TextLayer.css'
 
-import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCcw, Highlighter, MessageSquarePlus } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCcw, Highlighter, Maximize2, MessageSquarePlus, Minimize2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { mapCitationsToHighlights, type Citation, type HighlightRegion } from '@/services/citation-agent'
 import { getApiBaseUrl } from '@/services/api'
@@ -32,6 +32,8 @@ export interface PDFViewerProps {
   highlights?: Citation[]
   targetPage?: number
   onAskSelection?: (selectedText: string) => void
+  isFullscreen?: boolean
+  onToggleFullscreen?: () => void
 }
 
 type SelectionAction = {
@@ -72,7 +74,7 @@ function PageOverlay({ regions, page }: PageOverlayProps) {
   )
 }
 
-export function PDFViewer({ documentId, highlights = [], targetPage, onAskSelection }: PDFViewerProps) {
+export function PDFViewer({ documentId, highlights = [], targetPage, onAskSelection, isFullscreen = false, onToggleFullscreen }: PDFViewerProps) {
   const pdfUrl = `${getApiBaseUrl()}/documents/${documentId}/file`
   const token = getAuthToken()
   const pdfFile: DocumentFile = pdfUrl
@@ -241,6 +243,11 @@ export function PDFViewer({ documentId, highlights = [], targetPage, onAskSelect
           <Button variant="ghost" size="icon" onClick={zoomIn} disabled={scale >= MAX_SCALE} aria-label="Zoom in" className="h-7 w-7">
             <ZoomIn className="h-4 w-4" />
           </Button>
+          {onToggleFullscreen && (
+            <Button variant="ghost" size="icon" onClick={onToggleFullscreen} aria-label={isFullscreen ? 'Exit PDF fullscreen' : 'Enter PDF fullscreen'} className="h-7 w-7">
+              {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+            </Button>
+          )}
         </div>
       </div>
 
