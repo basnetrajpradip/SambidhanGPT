@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Deck, Fragment, Slide, useReveal } from '@revealjs/react'
 import katex from 'katex'
 import 'reveal.js/reveal.css'
@@ -21,6 +21,8 @@ const revealConfig = Object.freeze({
   transition: 'slide',
   scrollActivationWidth: 0,
 })
+
+const RAG_SLIDE_INDEX = 6
 
 const cosineFormulaMarkup = Object.freeze({
   __html: katex.renderToString(
@@ -96,6 +98,8 @@ const ragSteps = Object.freeze([
     detail: 'The UI scrolls to the cited page and highlights the exact matching source passage.',
   },
 ])
+
+const LAST_RAG_STEP_INDEX = ragSteps.length - 1
 
 const stackGroups = Object.freeze([
   {
@@ -433,6 +437,92 @@ function UserFlowDiagram() {
   )
 }
 
+function blockRevealNavigation(event) {
+  event.preventDefault()
+  event.stopPropagation()
+  event.stopImmediatePropagation()
+}
+
+function isRagSlideActive(deck) {
+  return deck?.getIndices?.().h === RAG_SLIDE_INDEX
+}
+
+function RagPipeline({ activeRagStep, setActiveRagStep, selectedRagStep }) {
+  const deck = useReveal()
+
+  useEffect(() => {
+    if (!deck?.on) {
+      return undefined
+    }
+
+    const handleSlideChanged = (event) => {
+      if (event.indexh === RAG_SLIDE_INDEX) {
+        setActiveRagStep(0)
+      }
+    }
+
+    deck.on('slidechanged', handleSlideChanged)
+    return () => deck.off('slidechanged', handleSlideChanged)
+  }, [deck, setActiveRagStep])
+
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (
+        event.altKey ||
+        event.ctrlKey ||
+        event.metaKey ||
+        !isRagSlideActive(deck)
+      ) {
+        return
+      }
+
+      if (event.key === 'ArrowRight' && activeRagStep < LAST_RAG_STEP_INDEX) {
+        blockRevealNavigation(event)
+        setActiveRagStep((step) => Math.min(step + 1, LAST_RAG_STEP_INDEX))
+        return
+      }
+
+      if (event.key === 'ArrowLeft' && activeRagStep > 0) {
+        blockRevealNavigation(event)
+        setActiveRagStep((step) => Math.max(step - 1, 0))
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown, { capture: true })
+    return () => window.removeEventListener('keydown', handleKeyDown, { capture: true })
+  }, [activeRagStep, deck, setActiveRagStep])
+
+  return (
+    <div className="rag-layout">
+      <figure className="figure-frame rag-figure">
+        <img src={ragFigure} alt="Retrieval augmented generation pipeline" />
+      </figure>
+      <div className="rag-stepper" aria-live="polite">
+        <div className="step-buttons" aria-label="RAG pipeline steps">
+          {ragSteps.map((step, index) => (
+            <button
+              type="button"
+              className={index === activeRagStep ? 'active' : ''}
+              onClick={() => setActiveRagStep(index)}
+              key={step.label}
+            >
+              {step.label}
+            </button>
+          ))}
+        </div>
+        <div className="step-meter" aria-hidden="true">
+          <span style={{ width: `${((activeRagStep + 1) / ragSteps.length) * 100}%` }}></span>
+        </div>
+        <div className="step-detail">
+          <p className="step-kicker">Step {activeRagStep + 1} of {ragSteps.length}</p>
+          <h3>{selectedRagStep.title}</h3>
+          <p>{selectedRagStep.detail}</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function ArchitectureDiagram() {
   return (
     <div className="architecture-diagram" aria-label="System architecture of SambidhanGPT">
@@ -499,7 +589,7 @@ function ArchitectureDiagram() {
 }
 
 function App() {
-  const [activeRagStep, setActiveRagStep] = useState(2)
+  const [activeRagStep, setActiveRagStep] = useState(0)
   const selectedRagStep = ragSteps[activeRagStep]
 
   return (
@@ -642,33 +732,11 @@ function App() {
               title="Offline ingestion meets online question answering"
               lead="The same vector space connects document chunks to user questions."
             />
-            <div className="rag-layout">
-              <figure className="figure-frame rag-figure">
-                <img src={ragFigure} alt="Retrieval augmented generation pipeline" />
-              </figure>
-              <div className="rag-stepper" aria-live="polite">
-                <div className="step-buttons" aria-label="RAG pipeline steps">
-                  {ragSteps.map((step, index) => (
-                    <button
-                      type="button"
-                      className={index === activeRagStep ? 'active' : ''}
-                      onClick={() => setActiveRagStep(index)}
-                      key={step.label}
-                    >
-                      {step.label}
-                    </button>
-                  ))}
-                </div>
-                <div className="step-meter" aria-hidden="true">
-                  <span style={{ width: `${((activeRagStep + 1) / ragSteps.length) * 100}%` }}></span>
-                </div>
-                <div className="step-detail">
-                  <p className="step-kicker">Step {activeRagStep + 1} of {ragSteps.length}</p>
-                  <h3>{selectedRagStep.title}</h3>
-                  <p>{selectedRagStep.detail}</p>
-                </div>
-              </div>
-            </div>
+            <RagPipeline
+              activeRagStep={activeRagStep}
+              setActiveRagStep={setActiveRagStep}
+              selectedRagStep={selectedRagStep}
+            />
           </div>
         </Slide>
 
