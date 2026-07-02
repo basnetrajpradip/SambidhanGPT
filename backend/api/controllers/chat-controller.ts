@@ -46,3 +46,23 @@ export async function getConversation(req: Request, res: Response) {
     res.status(500).json({ error: err.message || 'Failed to fetch conversation.' })
   }
 }
+
+export async function clearConversation(req: Request, res: Response) {
+  try {
+    const authReq = req as AuthenticatedRequest
+    const documentId = String(req.params.docId)
+    const doc = await getOwnedDocument(documentId, authReq.user.id)
+    if (!doc) {
+      return res.status(404).json({ error: 'Document not found.' })
+    }
+
+    await db
+      .delete(conversations)
+      .where(and(eq(conversations.documentId, documentId), eq(conversations.userId, authReq.user.id)))
+
+    res.json({ success: true })
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Failed to clear conversation.'
+    res.status(500).json({ error: message })
+  }
+}
