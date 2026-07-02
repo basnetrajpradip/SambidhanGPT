@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
-import { ChevronDown, PanelRightClose, Quote, Send, X } from 'lucide-react'
+import { ChevronDown, PanelRightClose, Quote, Send, Trash2, X } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
 import { SuggestionChips } from '@/components/SuggestionChips'
-import { getConversation, parseChatQuestion, sendMessage, type Citation } from '@/services/chat-service'
+import { clearConversation, getConversation, parseChatQuestion, sendMessage, type Citation } from '@/services/chat-service'
 
 interface UserMessage {
   role: 'user'
@@ -144,10 +144,13 @@ export function ChatInterface({ documentId, suggestions, onCitationClick, select
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [isRestoring, setIsRestoring] = useState(true)
+  const [isClearing, setIsClearing] = useState(false)
   const [selectedTextExpanded, setSelectedTextExpanded] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const activeSelectedText = selectedText?.trim() ? selectedText.trim() : null
+  const isChatBusy = isLoading || isRestoring || isClearing
+  const canClearMessages = messages.length > 0 && !isChatBusy
 
   useEffect(() => {
     setIsRestoring(true)
@@ -179,7 +182,7 @@ export function ChatInterface({ documentId, suggestions, onCitationClick, select
 
   const submit = async (question: string) => {
     const trimmed = question.trim()
-    if (!trimmed || isLoading || isRestoring) return
+    if (!trimmed || isChatBusy) return
 
     const userMsg: UserMessage = activeSelectedText ? { role: 'user', content: trimmed, selectedText: activeSelectedText } : { role: 'user', content: trimmed }
     setMessages((prev) => [...prev, userMsg])
@@ -208,6 +211,25 @@ export function ChatInterface({ documentId, suggestions, onCitationClick, select
     }
   }
 
+  const clearChat = async () => {
+    if (!canClearMessages) return
+
+    const confirmed = window.confirm('Clear this chat history? This will remove saved messages for this document.')
+    if (!confirmed) return
+
+    setIsClearing(true)
+    try {
+      await clearConversation(documentId)
+      setMessages([])
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to clear chat history.'
+      console.error('[ChatInterface] clearConversation failed:', err)
+      window.alert(message)
+    } finally {
+      setIsClearing(false)
+    }
+  }
+
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
@@ -222,11 +244,24 @@ export function ChatInterface({ documentId, suggestions, onCitationClick, select
           <p className="text-sm font-semibold tracking-tight">Ask a question</p>
           <p className="text-xs text-muted-foreground">Your conversation is saved to this document.</p>
         </div>
-        {onCollapse && (
-          <Button variant="ghost" size="icon" onClick={onCollapse} aria-label="Collapse chat" className="hidden h-8 w-8 shrink-0 rounded-xl text-muted-foreground hover:text-foreground xl:inline-flex">
-            <PanelRightClose className="h-4 w-4" />
+        <div className="flex shrink-0 items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={clearChat}
+            disabled={!canClearMessages}
+            aria-label="Clear chat"
+            title="Clear chat"
+            className="h-8 w-8 rounded-xl text-muted-foreground hover:text-destructive"
+          >
+            <Trash2 className="h-4 w-4" />
           </Button>
-        )}
+          {onCollapse && (
+            <Button variant="ghost" size="icon" onClick={onCollapse} aria-label="Collapse chat" className="hidden h-8 w-8 shrink-0 rounded-xl text-muted-foreground hover:text-foreground xl:inline-flex">
+              <PanelRightClose className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-3 py-4">
@@ -283,10 +318,10 @@ export function ChatInterface({ documentId, suggestions, onCitationClick, select
             onKeyDown={handleKeyDown}
             placeholder="Ask about this document…"
             rows={2}
-            disabled={isLoading || isRestoring}
+            disabled={isChatBusy}
             className="max-h-36 flex-1 rounded-2xl border-border/80 bg-background/90 shadow-sm focus:ring-4 focus:ring-primary/10"
           />
-          <Button size="icon" onClick={() => submit(input)} disabled={!input.trim() || isLoading || isRestoring} aria-label="Send message" className="h-11 w-11 rounded-2xl shadow-lg shadow-primary/20">
+          <Button size="icon" onClick={() => submit(input)} disabled={!input.trim() || isChatBusy} aria-label="Send message" className="h-11 w-11 rounded-2xl shadow-lg shadow-primary/20">
             <Send className="h-4 w-4" />
           </Button>
         </div>

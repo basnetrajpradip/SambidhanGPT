@@ -67,3 +67,7 @@ export async function getConversation(documentId: string): Promise<ConversationT
   const response = await api.get<ConversationTurn[]>(`/conversations/${documentId}`)
   return response.data
 }
+
+export async function clearConversation(documentId: string): Promise<void> {
+  await api.delete(`/conversations/${documentId}`)
+}
