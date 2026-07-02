@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
-import { Send } from 'lucide-react'
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown, Quote, Send, X } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -12,6 +11,7 @@ import { getConversation, sendMessage, type Citation } from '@/services/chat-ser
 interface UserMessage {
   role: 'user'
   content: string
+  selectedText?: string
 }
 
 interface AssistantMessage {
@@ -26,7 +26,11 @@ export interface ChatInterfaceProps {
   documentId: string
   suggestions: string[]
   onCitationClick?: (citation: Citation) => void
+  selectedText?: string | null
+  onClearSelectedText?: () => void
 }
+
+const SELECTED_TEXT_PREVIEW_LIMIT = 100
 
 function TypingIndicator() {
   return (
@@ -34,6 +38,65 @@ function TypingIndicator() {
       {[0, 150, 300].map((delay) => (
         <span key={delay} className="block h-2 w-2 rounded-full bg-muted-foreground animate-bounce" style={{ animationDelay: `${delay}ms` }} />
       ))}
+    </div>
+  )
+}
+
+function getSelectedTextPreview(text: string, expanded: boolean) {
+  if (expanded || text.length <= SELECTED_TEXT_PREVIEW_LIMIT) return text
+  return `${text.slice(0, SELECTED_TEXT_PREVIEW_LIMIT)}...`
+}
+
+function SelectedTextPreview({
+  selectedText,
+  expanded,
+  onToggle,
+  onClear,
+}: {
+  selectedText: string
+  expanded: boolean
+  onToggle: () => void
+  onClear?: () => void
+}) {
+  const canExpand = selectedText.length > SELECTED_TEXT_PREVIEW_LIMIT
+
+  return (
+    <div className="w-full rounded-2xl border border-primary/15 bg-primary/5 px-3 py-2 text-left shadow-sm">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-1.5 text-xs font-semibold text-primary">
+          <Quote className="h-3.5 w-3.5 shrink-0" />
+          <span>Ask questions -&gt;</span>
+        </div>
+        {onClear && (
+          <Button variant="ghost" size="icon" onClick={onClear} aria-label="Clear selected text" className="h-6 w-6 shrink-0 rounded-full text-muted-foreground hover:text-foreground">
+            <X className="h-3.5 w-3.5" />
+          </Button>
+        )}
+      </div>
+      <button
+        type="button"
+        disabled={!canExpand}
+        onClick={onToggle}
+        aria-expanded={canExpand ? expanded : undefined}
+        className="mt-1 w-full whitespace-pre-wrap break-words text-left text-xs leading-5 text-muted-foreground disabled:cursor-default"
+      >
+        {getSelectedTextPreview(selectedText, expanded)}
+      </button>
+    </div>
+  )
+}
+
+function UserBubble({ msg }: { msg: UserMessage }) {
+  const [expanded, setExpanded] = useState(false)
+
+  return (
+    <div className="flex justify-end">
+      <div className="flex max-w-[85%] flex-col items-end gap-1.5">
+        {msg.selectedText && <SelectedTextPreview selectedText={msg.selectedText} expanded={expanded} onToggle={() => setExpanded((value) => !value)} />}
+        <div className="max-w-full break-words rounded-2xl rounded-tr-md bg-primary px-3.5 py-2.5 text-sm leading-relaxed text-primary-foreground shadow-lg shadow-primary/20 whitespace-pre-wrap">
+          {msg.content}
+        </div>
+      </div>
     </div>
   )
 }
@@ -75,13 +138,15 @@ function AssistantBubble({ msg, onCitationClick }: { msg: AssistantMessage; onCi
 
 // ── ChatInterface ────────────────────────────────────────────────────────
 
-export function ChatInterface({ documentId, suggestions, onCitationClick }: ChatInterfaceProps) {
+export function ChatInterface({ documentId, suggestions, onCitationClick, selectedText, onClearSelectedText }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [isRestoring, setIsRestoring] = useState(true)
+  const [selectedTextExpanded, setSelectedTextExpanded] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const activeSelectedText = selectedText?.trim() ? selectedText.trim() : null
 
   useEffect(() => {
     setIsRestoring(true)
@@ -103,13 +168,18 @@ export function ChatInterface({ documentId, suggestions, onCitationClick }: Chat
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, isLoading])
 
+  useEffect(() => {
+    setSelectedTextExpanded(false)
+  }, [activeSelectedText])
+
   const submit = async (question: string) => {
     const trimmed = question.trim()
     if (!trimmed || isLoading || isRestoring) return
 
-    const userMsg: UserMessage = { role: 'user', content: trimmed }
+    const userMsg: UserMessage = activeSelectedText ? { role: 'user', content: trimmed, selectedText: activeSelectedText } : { role: 'user', content: trimmed }
     setMessages((prev) => [...prev, userMsg])
     setInput('')
+    onClearSelectedText?.()
     setIsLoading(true)
 
     try {
@@ -171,11 +241,7 @@ export function ChatInterface({ documentId, suggestions, onCitationClick }: Chat
 
         {messages.map((msg, i) =>
           msg.role === 'user' ? (
-            <div key={i} className="flex justify-end">
-              <div className="max-w-[85%] break-words rounded-2xl rounded-tr-md bg-primary px-3.5 py-2.5 text-sm leading-relaxed text-primary-foreground shadow-lg shadow-primary/20 whitespace-pre-wrap">
-                {msg.content}
-              </div>
-            </div>
+            <UserBubble key={i} msg={msg} />
           ) : (
             <AssistantBubble key={i} msg={msg as AssistantMessage} onCitationClick={onCitationClick} />
           ),
@@ -187,6 +253,16 @@ export function ChatInterface({ documentId, suggestions, onCitationClick }: Chat
       </div>
 
       <div className="flex shrink-0 flex-col gap-2 border-t border-border/70 bg-card/80 pb-3 pt-2 backdrop-blur">
+        {activeSelectedText && (
+          <div className="px-3">
+            <SelectedTextPreview
+              selectedText={activeSelectedText}
+              expanded={selectedTextExpanded}
+              onToggle={() => setSelectedTextExpanded((value) => !value)}
+              onClear={onClearSelectedText}
+            />
+          </div>
+        )}
         <div className="flex items-end gap-2 px-3">
           <Textarea
             ref={textareaRef}

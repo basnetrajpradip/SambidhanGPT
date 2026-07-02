@@ -69,6 +69,7 @@ export default function DocumentPage({ user, onLogout }: DocumentPageProps) {
   const [suggestions, setSuggestions] = useState<string[]>([])
   const [highlights, setHighlights] = useState<Citation[]>([])
   const [clausePage, setClausePage] = useState<number | undefined>(undefined)
+  const [selectedPdfText, setSelectedPdfText] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [activeMobilePanel, setActiveMobilePanel] = useState<MobilePanel>('info')
@@ -89,6 +90,10 @@ export default function DocumentPage({ user, onLogout }: DocumentPageProps) {
         setError(err instanceof Error ? err.message : 'Failed to load document data.')
       })
       .finally(() => setLoading(false))
+  }, [documentId])
+
+  useEffect(() => {
+    queueMicrotask(() => setSelectedPdfText(null))
   }, [documentId])
 
   if (!documentId) {
@@ -138,6 +143,8 @@ export default function DocumentPage({ user, onLogout }: DocumentPageProps) {
     <ChatInterface
       documentId={documentId}
       suggestions={suggestions}
+      selectedText={selectedPdfText}
+      onClearSelectedText={() => setSelectedPdfText(null)}
       onCitationClick={(c) => {
         setHighlights([c])
         setActiveMobilePanel('pdf')
@@ -145,7 +152,19 @@ export default function DocumentPage({ user, onLogout }: DocumentPageProps) {
     />
   )
 
-  const pdfPanel = loading ? <PDFSkeleton /> : <PDFViewer documentId={documentId} highlights={highlights} targetPage={clausePage} />
+  const pdfPanel = loading ? (
+    <PDFSkeleton />
+  ) : (
+    <PDFViewer
+      documentId={documentId}
+      highlights={highlights}
+      targetPage={clausePage}
+      onAskSelection={(text) => {
+        setSelectedPdfText(text)
+        setActiveMobilePanel('chat')
+      }}
+    />
+  )
   const analysisPanel = <AnalysisPanel analysis={analysis} loading={loading} />
   const infoPanel = (
     <>

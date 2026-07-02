@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Document, Page, pdfjs } from 'react-pdf'
 import type { ComponentProps } from 'react'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 import 'react-pdf/dist/Page/AnnotationLayer.css'
 import 'react-pdf/dist/Page/TextLayer.css'
 
-import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCcw, Highlighter } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCcw, Highlighter, MessageSquarePlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { mapCitationsToHighlights, type Citation, type HighlightRegion } from '@/services/citation-agent'
 import { getApiBaseUrl } from '@/services/api'
@@ -23,12 +23,21 @@ const ZOOM_STEP = 0.25
 // react-pdf ships an augmented PDFDocumentProxy superset; the cast to pdfjs-dist's
 // type is safe because citation-agent only calls .getPage().
 type DocLoadCallback = NonNullable<ComponentProps<typeof Document>['onLoadSuccess']>
+type DocumentFile = NonNullable<ComponentProps<typeof Document>['file']>
+type DocumentOptions = NonNullable<ComponentProps<typeof Document>['options']>
 type ReactPDFProxy = Parameters<DocLoadCallback>[0]
 
 export interface PDFViewerProps {
   documentId: string
   highlights?: Citation[]
   targetPage?: number
+  onAskSelection?: (selectedText: string) => void
+}
+
+type SelectionAction = {
+  readonly text: string
+  readonly left: number
+  readonly top: number
 }
 
 interface PageOverlayProps {
@@ -63,10 +72,11 @@ function PageOverlay({ regions, page }: PageOverlayProps) {
   )
 }
 
-export function PDFViewer({ documentId, highlights = [], targetPage }: PDFViewerProps) {
+export function PDFViewer({ documentId, highlights = [], targetPage, onAskSelection }: PDFViewerProps) {
   const pdfUrl = `${getApiBaseUrl()}/documents/${documentId}/file`
   const token = getAuthToken()
-  const pdfFile = token ? ({ url: pdfUrl, httpHeaders: { Authorization: `Bearer ${token}` } } as any) : pdfUrl
+  const pdfFile: DocumentFile = pdfUrl
+  const pdfOptions = useMemo<DocumentOptions | undefined>(() => (token ? { httpHeaders: { Authorization: `Bearer ${token}` } } : undefined), [token])
 
   const [numPages, setNumPages] = useState<number>(0)
   const [currentPage, setCurrentPage] = useState<number>(1)
@@ -74,7 +84,45 @@ export function PDFViewer({ documentId, highlights = [], targetPage }: PDFViewer
   const [pdfDoc, setPdfDoc] = useState<PDFDocumentProxy | null>(null)
   const [regions, setRegions] = useState<HighlightRegion[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [selectionAction, setSelectionAction] = useState<SelectionAction | null>(null)
+  const viewerRootRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
+
+  const updateSelectionAction = () => {
+    if (!onAskSelection) return
+
+    const selection = window.getSelection()
+    const range = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null
+    const container = scrollContainerRef.current
+    const root = viewerRootRef.current
+    const selectedText = selection?.toString().replace(/\s+/g, ' ').trim() ?? ''
+
+    if (!range || !container || !root || !selectedText) {
+      setSelectionAction(null)
+      return
+    }
+
+    const ancestor = range.commonAncestorContainer
+    const selectionElement = ancestor.nodeType === Node.ELEMENT_NODE ? ancestor : ancestor.parentElement
+    if (!selectionElement || !container.contains(selectionElement)) {
+      setSelectionAction(null)
+      return
+    }
+
+    const selectionRect = range.getBoundingClientRect()
+    const rootRect = root.getBoundingClientRect()
+    const left = Math.min(Math.max(selectionRect.left + selectionRect.width / 2 - rootRect.left, 44), rootRect.width - 44)
+    const top = Math.max(selectionRect.top - rootRect.top - 42, 52)
+
+    setSelectionAction({ text: selectedText, left, top })
+  }
+
+  const handleAskSelection = () => {
+    if (!selectionAction) return
+    onAskSelection?.(selectionAction.text)
+    setSelectionAction(null)
+    window.getSelection()?.removeAllRanges()
+  }
 
   const handleDocumentLoad = useCallback((proxy: ReactPDFProxy) => {
     setNumPages(proxy.numPages)
@@ -121,6 +169,10 @@ export function PDFViewer({ documentId, highlights = [], targetPage }: PDFViewer
   }, [targetPage, numPages])
 
   useEffect(() => {
+    queueMicrotask(() => setSelectionAction(null))
+  }, [currentPage, scale, documentId])
+
+  useEffect(() => {
     if (regions.length === 0) return
     const firstRect = regions[0].rects[0]
     if (!firstRect) return
@@ -148,7 +200,20 @@ export function PDFViewer({ documentId, highlights = [], targetPage }: PDFViewer
   const zoomReset = () => setScale(DEFAULT_SCALE)
 
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-gradient-to-br from-muted/60 to-background/70">
+    <div ref={viewerRootRef} className="relative flex h-full flex-col overflow-hidden bg-gradient-to-br from-muted/60 to-background/70">
+      {selectionAction && (
+        <Button
+          size="sm"
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={handleAskSelection}
+          className="absolute z-30 h-8 rounded-full px-3 text-xs shadow-lg shadow-slate-900/20"
+          style={{ left: selectionAction.left, top: selectionAction.top, transform: 'translateX(-50%)' }}
+        >
+          <MessageSquarePlus className="mr-1.5 h-3.5 w-3.5" />
+          Ask
+        </Button>
+      )}
+
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/70 bg-card/80 px-3 py-2 shrink-0 backdrop-blur md:px-4">
         <div className="flex items-center gap-1">
           <Button variant="ghost" size="icon" onClick={goToPrev} disabled={currentPage <= 1} aria-label="Previous page" className="h-7 w-7">
@@ -179,7 +244,13 @@ export function PDFViewer({ documentId, highlights = [], targetPage }: PDFViewer
         </div>
       </div>
 
-      <div ref={scrollContainerRef} className="flex-1 overflow-auto px-3 py-4 md:flex md:justify-center">
+      <div
+        ref={scrollContainerRef}
+        onMouseUp={updateSelectionAction}
+        onTouchEnd={updateSelectionAction}
+        onScroll={() => setSelectionAction(null)}
+        className="flex-1 overflow-auto px-3 py-4 md:flex md:justify-center"
+      >
         {loadError ? (
           <div className="flex items-center justify-center h-full">
             <p className="text-sm text-destructive">{loadError}</p>
@@ -187,6 +258,7 @@ export function PDFViewer({ documentId, highlights = [], targetPage }: PDFViewer
         ) : (
           <Document
             file={pdfFile}
+            options={pdfOptions}
             onLoadSuccess={handleDocumentLoad}
             onLoadError={(err) => setLoadError(`Failed to load PDF: ${err.message}`)}
             loading={
