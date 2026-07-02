@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useLocation, useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, LogOut, FileText, MessageSquare, PanelLeftClose, PanelLeftOpen, PanelRightOpen, ScrollText, Sparkles } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -17,6 +17,23 @@ import type { User } from '@/services/auth-service'
 
 type MobilePanel = 'chat' | 'pdf' | 'info'
 type InfoPanel = 'analysis' | 'clauses'
+
+function getInitialChatState(state: unknown) {
+  if (typeof state !== 'object' || state === null) return null
+  if (!('initialQuestion' in state) || !('initialQuestionId' in state)) return null
+
+  const { initialQuestion, initialQuestionId } = state
+  if (typeof initialQuestion !== 'string' || typeof initialQuestionId !== 'string') return null
+
+  const trimmedQuestion = initialQuestion.trim()
+  const trimmedQuestionId = initialQuestionId.trim()
+  if (!trimmedQuestion || !trimmedQuestionId) return null
+
+  return {
+    initialQuestion: trimmedQuestion,
+    initialQuestionId: trimmedQuestionId,
+  }
+}
 
 function ClauseSidebarSkeleton() {
   return (
@@ -62,6 +79,10 @@ interface DocumentPageProps {
 export default function DocumentPage({ user, onLogout }: DocumentPageProps) {
   const { id: documentId } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const location = useLocation()
+  const initialChatState = getInitialChatState(location.state)
+  const initialQuestion = initialChatState?.initialQuestion ?? null
+  const initialQuestionId = initialChatState?.initialQuestionId ?? null
 
   const [document, setDocument] = useState<DocumentSummary | null>(null)
   const [analysis, setAnalysis] = useState<DocumentAnalysis | null>(null)
@@ -98,6 +119,15 @@ export default function DocumentPage({ user, onLogout }: DocumentPageProps) {
   useEffect(() => {
     queueMicrotask(() => setSelectedPdfText(null))
   }, [documentId])
+
+  useEffect(() => {
+    if (!initialQuestionId) return
+    queueMicrotask(() => {
+      setActiveMobilePanel('chat')
+      setIsChatCollapsed(false)
+      setIsPdfFullscreen(false)
+    })
+  }, [initialQuestionId])
 
   if (!documentId) {
     return (
@@ -140,12 +170,15 @@ export default function DocumentPage({ user, onLogout }: DocumentPageProps) {
     />
   )
 
-  const chatPanel = loading ? (
+  const shouldRenderInitialChat = Boolean(initialQuestionId)
+  const chatPanel = loading && !shouldRenderInitialChat ? (
     <ChatSkeleton />
   ) : (
     <ChatInterface
       documentId={documentId}
-      suggestions={suggestions}
+      suggestions={loading ? [] : suggestions}
+      initialQuestion={initialQuestion}
+      initialQuestionId={initialQuestionId}
       selectedText={selectedPdfText}
       onClearSelectedText={() => setSelectedPdfText(null)}
       onCollapse={() => setIsChatCollapsed(true)}

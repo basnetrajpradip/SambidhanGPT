@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import { ChevronDown, PanelRightClose, Quote, Send, Trash2, X } from 'lucide-react'
 
@@ -25,6 +25,8 @@ type Message = UserMessage | AssistantMessage
 export interface ChatInterfaceProps {
   documentId: string
   suggestions: string[]
+  initialQuestion?: string | null
+  initialQuestionId?: string | null
   onCitationClick?: (citation: Citation) => void
   selectedText?: string | null
   onClearSelectedText?: () => void
@@ -32,10 +34,32 @@ export interface ChatInterfaceProps {
 }
 
 const SELECTED_TEXT_PREVIEW_LIMIT = 100
+const INITIAL_QUESTION_SESSION_PREFIX = 'sambidhan_initial_question'
+
+function getInitialQuestionSessionKey(id: string) {
+  return `${INITIAL_QUESTION_SESSION_PREFIX}:${id}`
+}
+
+function hasSubmittedInitialQuestion(id: string) {
+  try {
+    return window.sessionStorage.getItem(getInitialQuestionSessionKey(id)) === 'submitted'
+  } catch {
+    return false
+  }
+}
+
+function markInitialQuestionSubmitted(id: string) {
+  try {
+    window.sessionStorage.setItem(getInitialQuestionSessionKey(id), 'submitted')
+  } catch {
+    return
+  }
+}
 
 function TypingIndicator() {
   return (
-    <div className="flex items-end gap-1 self-start rounded-full bg-muted/80 px-3 py-2">
+    <div className="flex items-center gap-2 self-start rounded-full bg-muted/80 px-3 py-2">
+      <span className="text-xs font-medium text-muted-foreground">Thinking...</span>
       {[0, 150, 300].map((delay) => (
         <span key={delay} className="block h-2 w-2 rounded-full bg-muted-foreground animate-bounce" style={{ animationDelay: `${delay}ms` }} />
       ))}
@@ -139,7 +163,7 @@ function AssistantBubble({ msg, onCitationClick }: { msg: AssistantMessage; onCi
 
 // ── ChatInterface ────────────────────────────────────────────────────────
 
-export function ChatInterface({ documentId, suggestions, onCitationClick, selectedText, onClearSelectedText, onCollapse }: ChatInterfaceProps) {
+export function ChatInterface({ documentId, suggestions, initialQuestion, initialQuestionId, onCitationClick, selectedText, onClearSelectedText, onCollapse }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -180,7 +204,7 @@ export function ChatInterface({ documentId, suggestions, onCitationClick, select
     setSelectedTextExpanded(false)
   }, [activeSelectedText])
 
-  const submit = async (question: string) => {
+  const submit = useCallback(async (question: string) => {
     const trimmed = question.trim()
     if (!trimmed || isChatBusy) return
 
@@ -209,7 +233,17 @@ export function ChatInterface({ documentId, suggestions, onCitationClick, select
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [activeSelectedText, documentId, isChatBusy, onClearSelectedText])
+
+  useEffect(() => {
+    const trimmedQuestion = initialQuestion?.trim() ?? ''
+    const trimmedQuestionId = initialQuestionId?.trim() ?? ''
+    if (!trimmedQuestion || !trimmedQuestionId || isRestoring || isLoading || isClearing) return
+    if (hasSubmittedInitialQuestion(trimmedQuestionId)) return
+
+    markInitialQuestionSubmitted(trimmedQuestionId)
+    void submit(trimmedQuestion)
+  }, [initialQuestion, initialQuestionId, isClearing, isLoading, isRestoring, submit])
 
   const clearChat = async () => {
     if (!canClearMessages) return
