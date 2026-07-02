@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: docker.io/pgvector/pgvector:pg17-trixie
+    container_name: sambidhangpt-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: sambidhangpt
+      POSTGRES_USER: sambidhangpt
+      POSTGRES_PASSWORD: sambidhangpt
+    ports:
+      - "5430:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sambidhangpt -d sambidhangpt"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
