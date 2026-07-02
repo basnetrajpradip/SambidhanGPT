@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
 import { SuggestionChips } from '@/components/SuggestionChips'
-import { getConversation, sendMessage, type Citation } from '@/services/chat-service'
+import { getConversation, parseChatQuestion, sendMessage, type Citation } from '@/services/chat-service'
 
 interface UserMessage {
   role: 'user'
@@ -152,10 +152,14 @@ export function ChatInterface({ documentId, suggestions, onCitationClick, select
     setIsRestoring(true)
     getConversation(documentId)
       .then((turns) => {
-        const restored = turns.flatMap<Message>((turn) => [
-          { role: 'user', content: turn.question },
-          { role: 'assistant', content: turn.answer, citations: turn.citations ?? [] },
-        ])
+        const restored = turns.flatMap<Message>((turn) => {
+          const parsedQuestion = parseChatQuestion(turn.question)
+          const userMessage: UserMessage = parsedQuestion.selectedText
+            ? { role: 'user', content: parsedQuestion.question, selectedText: parsedQuestion.selectedText }
+            : { role: 'user', content: parsedQuestion.question }
+
+          return [userMessage, { role: 'assistant', content: turn.answer, citations: turn.citations ?? [] }]
+        })
         setMessages(restored)
       })
       .catch((err) => {
@@ -183,7 +187,7 @@ export function ChatInterface({ documentId, suggestions, onCitationClick, select
     setIsLoading(true)
 
     try {
-      const res = await sendMessage(documentId, trimmed)
+      const res = await sendMessage(documentId, trimmed, activeSelectedText)
       const assistantMsg: AssistantMessage = {
         role: 'assistant',
         content: res.answer,
