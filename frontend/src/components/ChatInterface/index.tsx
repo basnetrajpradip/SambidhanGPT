@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
 import { SuggestionChips } from '@/components/SuggestionChips'
-import { clearConversation, getConversation, parseChatQuestion, sendMessage, type Citation } from '@/services/chat-service'
+import { clearConversation, getConversation, parseChatQuestion, sendMessage, type ChatResponse, type Citation } from '@/services/chat-service'
 
 interface UserMessage {
   role: 'user'
@@ -35,6 +35,7 @@ export interface ChatInterfaceProps {
 
 const SELECTED_TEXT_PREVIEW_LIMIT = 100
 const INITIAL_QUESTION_SESSION_PREFIX = 'sambidhan_initial_question'
+const initialQuestionRequests = new Map<string, Promise<ChatResponse>>()
 
 function getInitialQuestionSessionKey(id: string) {
   return `${INITIAL_QUESTION_SESSION_PREFIX}:${id}`
@@ -54,6 +55,41 @@ function markInitialQuestionSubmitted(id: string) {
   } catch {
     return
   }
+}
+
+function hasUserQuestion(messages: ReadonlyArray<Message>, question: string) {
+  return messages.some((message) => message.role === 'user' && message.content.trim() === question)
+}
+
+function appendUserQuestionIfMissing(messages: ReadonlyArray<Message>, question: string): Message[] {
+  if (hasUserQuestion(messages, question)) return [...messages]
+  return [...messages, { role: 'user', content: question }]
+}
+
+function getInitialQuestionRequest({
+  id,
+  documentId,
+  question,
+}: {
+  readonly id: string
+  readonly documentId: string
+  readonly question: string
+}) {
+  const existingRequest = initialQuestionRequests.get(id)
+  if (existingRequest) return existingRequest
+
+  const request = sendMessage(documentId, question)
+    .then((response) => {
+      markInitialQuestionSubmitted(id)
+      return response
+    })
+    .catch((err: unknown) => {
+      initialQuestionRequests.delete(id)
+      throw err
+    })
+
+  initialQuestionRequests.set(id, request)
+  return request
 }
 
 function TypingIndicator() {
@@ -172,6 +208,7 @@ export function ChatInterface({ documentId, suggestions, initialQuestion, initia
   const [selectedTextExpanded, setSelectedTextExpanded] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const handledInitialQuestionIdRef = useRef<string | null>(null)
   const activeSelectedText = selectedText?.trim() ? selectedText.trim() : null
   const isChatBusy = isLoading || isRestoring || isClearing
   const canClearMessages = messages.length > 0 && !isChatBusy
@@ -238,12 +275,47 @@ export function ChatInterface({ documentId, suggestions, initialQuestion, initia
   useEffect(() => {
     const trimmedQuestion = initialQuestion?.trim() ?? ''
     const trimmedQuestionId = initialQuestionId?.trim() ?? ''
-    if (!trimmedQuestion || !trimmedQuestionId || isRestoring || isLoading || isClearing) return
-    if (hasSubmittedInitialQuestion(trimmedQuestionId)) return
+    if (!trimmedQuestion || !trimmedQuestionId || isRestoring || isClearing) return
+    if (handledInitialQuestionIdRef.current === trimmedQuestionId) return
+    if (hasUserQuestion(messages, trimmedQuestion)) {
+      handledInitialQuestionIdRef.current = trimmedQuestionId
+      return
+    }
+    if (hasSubmittedInitialQuestion(trimmedQuestionId) && !initialQuestionRequests.has(trimmedQuestionId)) {
+      handledInitialQuestionIdRef.current = trimmedQuestionId
+      return
+    }
+    if (isLoading) return
 
-    markInitialQuestionSubmitted(trimmedQuestionId)
-    void submit(trimmedQuestion)
-  }, [initialQuestion, initialQuestionId, isClearing, isLoading, isRestoring, submit])
+    handledInitialQuestionIdRef.current = trimmedQuestionId
+    setMessages((prev) => appendUserQuestionIfMissing(prev, trimmedQuestion))
+    setInput('')
+    setIsLoading(true)
+
+    getInitialQuestionRequest({
+      id: trimmedQuestionId,
+      documentId,
+      question: trimmedQuestion,
+    })
+      .then((res) => {
+        const assistantMsg: AssistantMessage = {
+          role: 'assistant',
+          content: res.answer,
+          citations: res.citations,
+        }
+        setMessages((prev) => [...appendUserQuestionIfMissing(prev, trimmedQuestion), assistantMsg])
+      })
+      .catch((err: unknown) => {
+        const errMsg: AssistantMessage = {
+          role: 'assistant',
+          content: 'Something went wrong. Please try again.',
+          citations: [],
+        }
+        console.error('[ChatInterface] initial question failed:', err)
+        setMessages((prev) => [...appendUserQuestionIfMissing(prev, trimmedQuestion), errMsg])
+      })
+      .finally(() => setIsLoading(false))
+  }, [documentId, initialQuestion, initialQuestionId, isClearing, isLoading, isRestoring, messages])
 
   const clearChat = async () => {
     if (!canClearMessages) return
