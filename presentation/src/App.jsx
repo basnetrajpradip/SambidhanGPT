@@ -1,10 +1,8 @@
-import { useEffect, useState } from 'react'
-import { Deck, Fragment, Slide, useReveal } from '@revealjs/react'
+import { Deck, Slide } from '@revealjs/react'
 import katex from 'katex'
 import 'reveal.js/reveal.css'
 import 'katex/dist/katex.min.css'
-import hnswFigure from './assets/report/hnsw-graph.png'
-import ragFigure from './assets/report/rag-pipeline.png'
+import tuLogo from './assets/report/tribhuvan-university-logo.png'
 import './App.css'
 
 const revealConfig = Object.freeze({
@@ -22,11 +20,57 @@ const revealConfig = Object.freeze({
   scrollActivationWidth: 0,
 })
 
-const RAG_SLIDE_INDEX = 6
+const students = Object.freeze([
+  'Neeraj Lamsal / Roll No. 79010201 / Batch 2079',
+  'Nirajan Rijal / Roll No. 79010207 / Batch 2079',
+  'Pradip Raj Basnet / Roll No. 79010216 / Batch 2079',
+])
+
+const studentNames = students.map((student) => student.split(' / ')[0]).join(', ')
+
+const problemItems = Object.freeze([
+  'Legal text is long and hard to search.',
+  'LLMs can invent legal clauses.',
+  'Answers need exact source proof.',
+  'Users need document-specific answers.',
+])
+
+const objectives = Object.freeze([
+  'Answer questions from uploaded legal PDFs.',
+  'Highlight exact cited passages.',
+  'Extract clauses, suggestions, and risks.',
+  'Apply CSIT algorithms in practice.',
+])
+
+const literatureFindings = Object.freeze([
+  {
+    topic: 'LLM hallucination',
+    insight: 'Fluent model memory is unsafe for legal answers without retrieval grounding.',
+  },
+  {
+    topic: 'Semantic retrieval',
+    insight: '3072-dimensional embeddings make question and document chunks comparable.',
+  },
+  {
+    topic: 'RAG',
+    insight: 'Offline ingestion and online retrieval reduce hallucination by constraining context.',
+  },
+  {
+    topic: 'Vector database',
+    insight: 'PostgreSQL + pgvector with HNSW supports self-hostable nearest-neighbour search.',
+  },
+])
+
+const comparisonRows = Object.freeze([
+  ['Strict grounding', 'No', 'Partial', 'Yes'],
+  ['Passage citation', 'No', 'Page only', 'Character accurate'],
+  ['Legal clauses', 'No', 'No', 'Yes'],
+  ['Self-hostable', 'No', 'No', 'Yes'],
+])
 
 const cosineFormulaMarkup = Object.freeze({
   __html: katex.renderToString(
-    String.raw`\cos(q,d)=\frac{\mathbf{q}\cdot\mathbf{d}}{\lVert\mathbf{q}\rVert_2\,\lVert\mathbf{d}\rVert_2}`,
+    String.raw`\cos(q,d)=\frac{\sum_i q_i d_i}{\sqrt{\sum_i q_i^2}\sqrt{\sum_i d_i^2}}`,
     {
       displayMode: true,
       throwOnError: false,
@@ -34,167 +78,155 @@ const cosineFormulaMarkup = Object.freeze({
   ),
 })
 
-const problemPoints = Object.freeze([
+const algorithmItems = Object.freeze([
   {
-    title: 'Long documents',
-    detail: 'Legal PDFs are dense, formal, and slow to inspect manually.',
-    icon: 'document',
+    name: 'Cosine similarity',
+    course: 'Vector ranking',
+    detail: 'Finds semantically closest chunks.',
   },
   {
-    title: 'Hallucination risk',
-    detail: 'General LLMs can invent clauses or legal references.',
-    icon: 'warning',
+    name: 'HNSW search',
+    course: 'Fast retrieval',
+    detail: 'Speeds up nearest-neighbour lookup.',
   },
   {
-    title: 'Weak trust signals',
-    detail: 'Answers without exact sources are hard to verify.',
-    icon: 'shield',
+    name: 'Recursive chunking',
+    course: 'Text splitting',
+    detail: 'Builds overlapping PDF chunks.',
   },
   {
-    title: 'Document specificity',
-    detail: 'Users need answers from the PDF they uploaded.',
-    icon: 'target',
-  },
-])
-
-const objectives = Object.freeze([
-  'Document-grounded question answering',
-  'Exact PDF citation highlighting',
-  'Clause extraction, suggested questions, and document analysis',
-  'Real-world application of CSIT algorithms',
-])
-
-const processSteps = Object.freeze([
-  { label: 'Upload PDF', icon: 'upload' },
-  { label: 'Retrieve evidence', icon: 'retrieve' },
-  { label: 'Generate answer', icon: 'generate' },
-  { label: 'Highlight source', icon: 'highlight' },
-])
-
-const ragSteps = Object.freeze([
-  {
-    label: 'Parse',
-    title: 'PDF text becomes page-aware chunks',
-    detail: 'The ingestion agent extracts page text, keeps offsets, and preserves source location.',
+    name: 'String matching',
+    course: 'Citation mapping',
+    detail: 'Locates cited passages in the PDF.',
   },
   {
-    label: 'Embed',
-    title: 'Chunks enter a shared vector space',
-    detail: 'gemini-embedding-001 converts text into 3072-dimensional vectors stored in pgvector.',
-  },
-  {
-    label: 'Retrieve',
-    title: 'Similarity search finds the strongest evidence',
-    detail: 'The query embedding is ranked against document chunks with cosine distance and HNSW.',
-  },
-  {
-    label: 'Generate',
-    title: 'Gemini answers only from retrieved context',
-    detail: 'Contextual compression keeps the prompt focused before Gemini 2.5 Flash generates.',
-  },
-  {
-    label: 'Cite',
-    title: 'Citations are re-anchored to PDF text',
-    detail: 'The UI scrolls to the cited page and highlights the exact matching source passage.',
+    name: 'PBKDF2 + HMAC',
+    course: 'Security',
+    detail: 'Protects passwords and tokens.',
   },
 ])
 
-const LAST_RAG_STEP_INDEX = ragSteps.length - 1
+const preprocessingItems = Object.freeze([
+  {
+    title: 'PDF parsing',
+    detail: 'Extract page-aware text with pdfjs-dist and preserve page offsets.',
+  },
+  {
+    title: 'Chunking',
+    detail: 'Create overlapping chunks so cross-boundary context remains retrievable.',
+  },
+  {
+    title: 'Embedding',
+    detail: 'Generate gemini-embedding-001 vectors with 3072 dimensions.',
+  },
+  {
+    title: 'Storage',
+    detail: 'Persist chunks, offsets, page numbers, and embeddings in PostgreSQL + pgvector.',
+  },
+])
 
-const stackGroups = Object.freeze([
+const environmentGroups = Object.freeze([
   {
-    group: 'Frontend',
-    icon: 'frontend',
-    items: ['React 19', 'Vite', 'Tailwind', 'react-pdf/pdfjs'],
+    label: 'Frontend',
+    value: 'React 19, Vite 7, Tailwind CSS 4, shadcn/Radix UI, react-pdf',
   },
   {
-    group: 'Backend',
-    icon: 'backend',
-    items: ['Express 5', 'TypeScript', 'Agent modules'],
+    label: 'Backend',
+    value: 'Express.js 5, Node.js, TypeScript, multer, agent modules',
   },
   {
-    group: 'Data',
-    icon: 'data',
-    items: ['PostgreSQL', 'pgvector', 'Drizzle ORM'],
+    label: 'Data and AI',
+    value: 'PostgreSQL, pgvector, Drizzle ORM, Gemini 2.5 Flash, gemini-embedding-001',
   },
   {
-    group: 'AI',
-    icon: 'ai',
-    items: ['Gemini 2.5 Flash', 'gemini-embedding-001'],
+    label: 'Security and Tooling',
+    value: 'Node crypto, PBKDF2, HMAC, Git, local development environment',
+  },
+])
+
+const performanceMeasures = Object.freeze([
+  {
+    label: 'Retrieval',
+    metric: 'Top-K = 5',
+    note: 'Cosine-distance ranking with HNSW index for responsive vector search.',
   },
   {
-    group: 'Security',
+    label: 'Unit checks',
+    metric: '8 pass',
+    note: 'Password hashing, chunking, offsets, embeddings, cosine ordering, upload, token expiry.',
+  },
+  {
+    label: 'System checks',
+    metric: '8 pass',
+    note: 'Register/login, upload, grounded Q&A, refusal, citation highlight, clauses, isolation, history.',
+  },
+  {
+    label: 'Trust checks',
+    metric: 'Source visible',
+    note: 'Citation click scrolls to page and highlights the cited passage.',
+  },
+])
+
+const resultItems = Object.freeze([
+  'Uploaded PDFs are ingested and made queryable.',
+  'Answerable questions return grounded answers with citations.',
+  'Unanswerable questions are refused instead of hallucinated.',
+  'Citation highlighting works in most cases despite text-extraction differences.',
+  'HNSW keeps retrieval responsive as chunk count grows.',
+])
+
+const conclusionItems = Object.freeze([
+  'RAG keeps answers grounded in uploaded PDFs.',
+  'Citations make every answer verifiable.',
+  'Legal clauses and analysis improve document understanding.',
+  'CSIT algorithms were applied in a real system.',
+])
+
+const futureItems = Object.freeze([
+  {
+    icon: 'ocr',
+    text: 'Add OCR for scanned PDFs',
+  },
+  {
+    icon: 'jobs',
+    text: 'Move ingestion to background jobs',
+  },
+  {
     icon: 'security',
-    items: ['PBKDF2', 'HMAC', 'User isolation'],
+    text: 'Improve authentication and access control',
+  },
+  {
+    icon: 'search',
+    text: 'Support cross-document search',
+  },
+  {
+    icon: 'language',
+    text: 'Add Nepali legal terminology support',
   },
 ])
 
-const verificationItems = Object.freeze([
-  'Upload and ingestion passed',
-  'Answerable questions return grounded answers',
-  'Unanswerable questions are refused',
-  'Citation clicks scroll and highlight',
-  'User isolation works',
-])
-
-const presentationModules = Object.freeze([
-  'PDF Viewer',
-  'Chat Interface',
-  'Clause Sidebar',
-  'Analysis Panel',
-  'Suggestion Chips',
-])
-
-const agentModules = Object.freeze([
-  'Ingestion Agent',
-  'RAG Agent',
-  'Clause Agent',
-  'Suggestion Agent',
-  'Analysis Agent',
-])
-
-const userFlowSteps = Object.freeze([
+const acknowledgments = Object.freeze([
   {
-    title: 'Authenticate',
-    detail: 'Bearer token scopes the workspace',
-    icon: 'auth',
+    role: 'Supervisor',
+    name: 'Mr. Akkal Bahadur Bist',
   },
   {
-    title: 'Upload PDF',
-    detail: 'Pages become source-aware text',
-    icon: 'upload',
+    role: 'Head / Coordinator',
+    name: 'Department of CSIT, Amrit Campus; Asst. Prof. Dabbal Singh Mahara',
   },
   {
-    title: 'Ask',
-    detail: 'Question becomes an embedding',
-    icon: 'question',
+    role: 'Faculty',
+    name: 'Department of Computer Science and Information Technology',
   },
   {
-    title: 'Answer',
-    detail: 'Gemini uses retrieved evidence',
-    icon: 'answer',
+    role: 'Campus',
+    name: 'Amrit Campus, Thamel, Kathmandu',
   },
   {
-    title: 'Inspect',
-    detail: 'Citation scrolls to highlighted text',
-    icon: 'highlight',
+    role: 'Evaluating Committee',
+    name: 'Supervisor, Coordinator, Internal Examiner, and External Examiner',
   },
 ])
-
-function JumpButton({ target, children, tone = 'primary' }) {
-  const deck = useReveal()
-
-  return (
-    <button
-      type="button"
-      className={`jump-button jump-button-${tone}`}
-      onClick={() => deck?.slide(target)}
-    >
-      <span>{children}</span>
-      <span aria-hidden="true">-&gt;</span>
-    </button>
-  )
-}
 
 function SectionHeader({ eyebrow, title, lead }) {
   return (
@@ -206,700 +238,467 @@ function SectionHeader({ eyebrow, title, lead }) {
   )
 }
 
-function StatusIcon() {
+function FormulaBlock() {
   return (
-    <svg className="status-icon" aria-hidden="true" viewBox="0 0 64 64">
-      <circle cx="32" cy="32" r="22" />
-      <path d="M21 33l8 8 15-18" />
-    </svg>
+    <div
+      className="formula-block"
+      aria-label="Cosine similarity formula"
+      dangerouslySetInnerHTML={cosineFormulaMarkup}
+    />
   )
 }
 
-function ProblemIcon({ type }) {
-  if (type === 'document') {
-    return (
-      <svg aria-hidden="true" viewBox="0 0 64 64">
-        <path d="M19 10h21l8 8v36H19z" />
-        <path d="M40 10v10h10" />
-        <path d="M26 28h16" />
-        <path d="M26 36h16" />
-        <path d="M26 44h11" />
-      </svg>
-    )
-  }
-
-  if (type === 'warning') {
-    return (
-      <svg aria-hidden="true" viewBox="0 0 64 64">
-        <path d="M32 12l22 40H10z" />
-        <path d="M32 25v13" />
-        <path d="M32 46h.01" />
-      </svg>
-    )
-  }
-
-  if (type === 'shield') {
-    return (
-      <svg aria-hidden="true" viewBox="0 0 64 64">
-        <path d="M32 9l19 8v14c0 13-8 22-19 26-11-4-19-13-19-26V17z" />
-        <path d="M23 32l6 6 13-14" />
-      </svg>
-    )
-  }
-
-  if (type === 'target') {
-    return (
-      <svg aria-hidden="true" viewBox="0 0 64 64">
-        <circle cx="32" cy="32" r="22" />
-        <circle cx="32" cy="32" r="12" />
-        <circle cx="32" cy="32" r="3" />
-        <path d="M32 6v8" />
-        <path d="M32 50v8" />
-        <path d="M6 32h8" />
-        <path d="M50 32h8" />
-      </svg>
-    )
-  }
-
-  return null
+function StatusMark({ children }) {
+  return <span className="status-mark">{children}</span>
 }
 
-function ProcessIcon({ type }) {
-  if (type === 'upload') {
+function FutureIcon({ type }) {
+  if (type === 'ocr') {
     return (
-      <svg className="process-icon" aria-hidden="true" viewBox="0 0 64 64">
-        <path d="M18 10h22l8 8v36H18z" />
-        <path d="M40 10v10h10" />
-        <path d="M32 42V24" />
-        <path d="M24 32l8-8 8 8" />
+      <svg aria-hidden="true" viewBox="0 0 48 48">
+        <path d="M13 6h17l7 7v29H13z" />
+        <path d="M30 6v9h8" />
+        <path d="M18 24h14" />
+        <path d="M18 31h10" />
       </svg>
     )
   }
 
-  if (type === 'retrieve') {
+  if (type === 'jobs') {
     return (
-      <svg className="process-icon" aria-hidden="true" viewBox="0 0 64 64">
-        <path d="M16 12h28v24H16z" />
-        <path d="M22 20h16" />
-        <path d="M22 28h10" />
-        <circle cx="41" cy="41" r="9" />
-        <path d="M48 48l7 7" />
-      </svg>
-    )
-  }
-
-  if (type === 'generate') {
-    return (
-      <svg className="process-icon" aria-hidden="true" viewBox="0 0 64 64">
-        <path d="M14 16h30a8 8 0 0 1 8 8v10a8 8 0 0 1-8 8H30l-12 9v-9h-4z" />
-        <path d="M43 10l2 6 6 2-6 2-2 6-2-6-6-2 6-2z" />
-        <path d="M24 27h16" />
-        <path d="M24 34h10" />
-      </svg>
-    )
-  }
-
-  if (type === 'highlight') {
-    return (
-      <svg className="process-icon" aria-hidden="true" viewBox="0 0 64 64">
-        <path d="M17 12h30v40H17z" />
-        <path d="M24 22h16" />
-        <path d="M24 30h12" />
-        <rect className="process-icon-fill" x="22" y="37" width="20" height="10" rx="2" />
-        <path d="M24 42h16" />
-      </svg>
-    )
-  }
-
-  return null
-}
-
-function StackIcon({ type }) {
-  if (type === 'frontend') {
-    return (
-      <svg className="stack-icon" aria-hidden="true" viewBox="0 0 64 64">
-        <rect x="10" y="14" width="44" height="30" rx="4" />
-        <path d="M24 52h16" />
-        <path d="M32 44v8" />
-        <path d="M25 27l-6 5 6 5" />
-        <path d="M39 27l6 5-6 5" />
-      </svg>
-    )
-  }
-
-  if (type === 'backend') {
-    return (
-      <svg className="stack-icon" aria-hidden="true" viewBox="0 0 64 64">
-        <rect x="12" y="12" width="40" height="12" rx="3" />
-        <rect x="12" y="28" width="40" height="12" rx="3" />
-        <rect x="12" y="44" width="40" height="8" rx="3" />
-        <path d="M20 18h.01" />
-        <path d="M20 34h.01" />
-        <path d="M20 48h.01" />
-      </svg>
-    )
-  }
-
-  if (type === 'data') {
-    return (
-      <svg className="stack-icon" aria-hidden="true" viewBox="0 0 64 64">
-        <ellipse cx="32" cy="16" rx="20" ry="8" />
-        <path d="M12 16v24c0 4 9 8 20 8s20-4 20-8V16" />
-        <path d="M12 28c0 4 9 8 20 8s20-4 20-8" />
-      </svg>
-    )
-  }
-
-  if (type === 'ai') {
-    return (
-      <svg className="stack-icon" aria-hidden="true" viewBox="0 0 64 64">
-        <path d="M32 10l3 11 11 3-11 3-3 11-3-11-11-3 11-3z" />
-        <path d="M48 36l2 7 7 2-7 2-2 7-2-7-7-2 7-2z" />
-        <path d="M18 40l1.5 5 5 1.5-5 1.5-1.5 5-1.5-5-5-1.5 5-1.5z" />
+      <svg aria-hidden="true" viewBox="0 0 48 48">
+        <path d="M11 15h26" />
+        <path d="M31 9l6 6-6 6" />
+        <path d="M37 33H11" />
+        <path d="M17 27l-6 6 6 6" />
       </svg>
     )
   }
 
   if (type === 'security') {
     return (
-      <svg className="stack-icon" aria-hidden="true" viewBox="0 0 64 64">
-        <path d="M32 9l19 8v14c0 13-8 22-19 26-11-4-19-13-19-26V17z" />
-        <path d="M24 33h16" />
-        <path d="M28 33v-5a4 4 0 0 1 8 0v5" />
-        <rect x="25" y="33" width="14" height="12" rx="2" />
+      <svg aria-hidden="true" viewBox="0 0 48 48">
+        <path d="M24 6l14 6v11c0 9-5 15-14 19-9-4-14-10-14-19V12z" />
+        <path d="M18 25h12" />
+        <path d="M20 25v-4a4 4 0 0 1 8 0v4" />
       </svg>
     )
   }
 
-  return null
-}
-
-function FlowIcon({ type }) {
-  if (type === 'auth') {
+  if (type === 'search') {
     return (
-      <svg aria-hidden="true" viewBox="0 0 64 64">
-        <circle cx="25" cy="24" r="8" />
-        <path d="M13 50c2-10 8-15 18-15" />
-        <path d="M38 35l13-13" />
-        <path d="M45 22h8v8" />
+      <svg aria-hidden="true" viewBox="0 0 48 48">
+        <circle cx="21" cy="21" r="10" />
+        <path d="M29 29l9 9" />
+        <path d="M17 21h8" />
       </svg>
     )
   }
 
-  if (type === 'question') {
-    return (
-      <svg aria-hidden="true" viewBox="0 0 64 64">
-        <path d="M14 16h36v26H28l-10 8v-8h-4z" />
-        <path d="M29 25a6 6 0 1 1 7 6c-3 1-4 3-4 6" />
-        <path d="M32 44h.01" />
-      </svg>
-    )
-  }
-
-  if (type === 'answer') {
-    return (
-      <svg aria-hidden="true" viewBox="0 0 64 64">
-        <path d="M14 17h36v30H14z" />
-        <path d="M22 27h20" />
-        <path d="M22 36h12" />
-        <path d="M43 10l2 6 6 2-6 2-2 6-2-6-6-2 6-2z" />
-      </svg>
-    )
-  }
-
-  return <ProcessIcon type={type} />
-}
-
-function LatexFormula() {
   return (
-    <div
-      className="formula"
-      aria-label="cosine similarity equals q dot d divided by the product of the L2 norms of q and d"
-      dangerouslySetInnerHTML={cosineFormulaMarkup}
-    />
+    <svg aria-hidden="true" viewBox="0 0 48 48">
+      <circle cx="24" cy="24" r="15" />
+      <path d="M9 24h30" />
+      <path d="M24 9c5 5 5 25 0 30" />
+      <path d="M24 9c-5 5-5 25 0 30" />
+    </svg>
   )
 }
 
-function UserFlowDiagram() {
+function ArchitectureTier({ label, title, children }) {
   return (
-    <div className="flow-diagram" aria-label="Authenticated question answering workflow">
-      {userFlowSteps.map((step, index) => (
-        <article className="flow-card" key={step.title}>
-          <span className="flow-step-number">{String(index + 1).padStart(2, '0')}</span>
-          <span className="flow-icon">
-            <FlowIcon type={step.icon} />
-          </span>
-          <h3>{step.title}</h3>
-          <p>{step.detail}</p>
+    <article className="html-architecture-tier">
+      <span>{label}</span>
+      <h3>{title}</h3>
+      <div>{children}</div>
+    </article>
+  )
+}
+
+function SystemArchitectureDiagram() {
+  return (
+    <div className="html-architecture" aria-label="System architecture of SambidhanGPT">
+      <ArchitectureTier label="Presentation Layer" title="React + Vite">
+        <p>PDF Viewer</p>
+        <p>Chat Interface</p>
+        <p>Clause Sidebar</p>
+        <p>Analysis Panel</p>
+      </ArchitectureTier>
+
+      <div className="architecture-arrow">
+        <span>REST API</span>
+      </div>
+
+      <ArchitectureTier label="Application Layer" title="Express.js + TypeScript">
+        <p>Auth Middleware</p>
+        <p>Routes and Controllers</p>
+        <p>Agent Layer</p>
+        <p>Drizzle ORM</p>
+      </ArchitectureTier>
+
+      <div className="architecture-arrow">
+        <span>vector search</span>
+      </div>
+
+      <div className="html-service-stack">
+        <article>
+          <span>Data Layer</span>
+          <h3>PostgreSQL + pgvector</h3>
+          <p>Documents, chunks, vectors, citations</p>
         </article>
-      ))}
-    </div>
-  )
-}
-
-function blockRevealNavigation(event) {
-  event.preventDefault()
-  event.stopPropagation()
-  event.stopImmediatePropagation()
-}
-
-function isRagSlideActive(deck) {
-  return deck?.getIndices?.().h === RAG_SLIDE_INDEX
-}
-
-function RagPipeline({ activeRagStep, setActiveRagStep, selectedRagStep }) {
-  const deck = useReveal()
-
-  useEffect(() => {
-    if (!deck?.on) {
-      return undefined
-    }
-
-    const handleSlideChanged = (event) => {
-      if (event.indexh === RAG_SLIDE_INDEX) {
-        setActiveRagStep(0)
-      }
-    }
-
-    deck.on('slidechanged', handleSlideChanged)
-    return () => deck.off('slidechanged', handleSlideChanged)
-  }, [deck, setActiveRagStep])
-
-  useEffect(() => {
-    const handleKeyDown = (event) => {
-      if (
-        event.altKey ||
-        event.ctrlKey ||
-        event.metaKey ||
-        !isRagSlideActive(deck)
-      ) {
-        return
-      }
-
-      if (event.key === 'ArrowRight' && activeRagStep < LAST_RAG_STEP_INDEX) {
-        blockRevealNavigation(event)
-        setActiveRagStep((step) => Math.min(step + 1, LAST_RAG_STEP_INDEX))
-        return
-      }
-
-      if (event.key === 'ArrowLeft' && activeRagStep > 0) {
-        blockRevealNavigation(event)
-        setActiveRagStep((step) => Math.max(step - 1, 0))
-      }
-    }
-
-    window.addEventListener('keydown', handleKeyDown, { capture: true })
-    return () => window.removeEventListener('keydown', handleKeyDown, { capture: true })
-  }, [activeRagStep, deck, setActiveRagStep])
-
-  return (
-    <div className="rag-layout">
-      <figure className="figure-frame rag-figure">
-        <img src={ragFigure} alt="Retrieval augmented generation pipeline" />
-      </figure>
-      <div className="rag-stepper" aria-live="polite">
-        <div className="step-buttons" aria-label="RAG pipeline steps">
-          {ragSteps.map((step, index) => (
-            <button
-              type="button"
-              className={index === activeRagStep ? 'active' : ''}
-              onClick={() => setActiveRagStep(index)}
-              key={step.label}
-            >
-              {step.label}
-            </button>
-          ))}
-        </div>
-        <div className="step-meter" aria-hidden="true">
-          <span style={{ width: `${((activeRagStep + 1) / ragSteps.length) * 100}%` }}></span>
-        </div>
-        <div className="step-detail">
-          <p className="step-kicker">Step {activeRagStep + 1} of {ragSteps.length}</p>
-          <h3>{selectedRagStep.title}</h3>
-          <p>{selectedRagStep.detail}</p>
-        </div>
+        <article>
+          <span>External AI</span>
+          <h3>Google Gemini</h3>
+          <p>Embedding and grounded answer generation</p>
+        </article>
       </div>
     </div>
   )
 }
 
-function ArchitectureDiagram() {
+function CoverSlide() {
   return (
-    <div className="architecture-diagram" aria-label="System architecture of SambidhanGPT">
-      <div className="architecture-map">
-        <article className="architecture-tier presentation-tier">
-          <div className="architecture-heading">
-            <span>Presentation Layer</span>
-            <strong>React + Vite</strong>
-          </div>
-          <div className="architecture-node-list">
-            {presentationModules.map((module) => (
-              <div className="architecture-node" key={module}>{module}</div>
+    <Slide transition="fade" className="cover-slide">
+      <div className="cover-page">
+        <div className="cover-institution">
+          <p>Tribhuvan University</p>
+          <p>Institute of Science and Technology</p>
+          <p>Amrit Campus</p>
+        </div>
+
+        <img className="cover-logo" src={tuLogo} alt="Tribhuvan University logo" />
+
+        <p className="cover-kicker">Project Work Report on</p>
+        <h1>
+          SambidhanGPT: AI-Powered Legal Document Question-Answering with PDF Citation
+          Highlighting
+        </h1>
+
+        <div className="cover-supervision">
+          <span>Under the Supervision of</span>
+          <strong>Mr. Akkal Bahadur Bist</strong>
+          <span>Department of Computer Science &amp; Information Technology</span>
+          <span>Amrit Campus, Thamel, Kathmandu</span>
+        </div>
+
+        <p className="cover-degree">
+          In partial fulfillment of the requirements for the degree of Bachelor of Science in
+          Computer Science and Information Technology (B.Sc. CSIT)
+        </p>
+
+        <div className="cover-submission">
+          <div>
+            <strong>Submitted by</strong>
+            {students.map((student) => (
+              <span key={student}>{student}</span>
             ))}
           </div>
-        </article>
-
-        <div className="architecture-connector" aria-hidden="true">
-          <span>REST / axios<br />JSON over HTTPS</span>
-        </div>
-
-        <article className="architecture-tier application-tier">
-          <div className="architecture-heading">
-            <span>Application Layer</span>
-            <strong>Express.js + TypeScript</strong>
+          <div>
+            <strong>Submitted to</strong>
+            <span>Department of Computer Science and Information Technology</span>
+            <span>Amrit Campus, Thamel, Kathmandu</span>
           </div>
-          <div className="application-flow">
-            <div className="architecture-node">
-              Auth Middleware
-              <span>Bearer token</span>
-            </div>
-            <div className="architecture-node">Routes &amp; Controllers</div>
-            <div className="agent-layer">
-              <p>Agent Layer</p>
-              <div>
-                {agentModules.map((module) => (
-                  <span key={module}>{module}</span>
-                ))}
-              </div>
-            </div>
-            <div className="architecture-node">Drizzle ORM</div>
-          </div>
-        </article>
-
-        <div className="architecture-connector architecture-connector-service" aria-hidden="true">
-          <span>embed / generate<br />vector search</span>
         </div>
 
-        <div className="architecture-services">
-          <article className="service-card data-service">
-            <span>Data Layer</span>
-            <strong>PostgreSQL + pgvector</strong>
-            <p>HNSW halfvec cosine index</p>
-          </article>
-          <article className="service-card gemini-service">
-            <span>Google Gemini</span>
-            <strong>2.5 Flash</strong>
-            <p>embedding-001</p>
-          </article>
-        </div>
+        <p className="cover-date">February, 2026</p>
       </div>
-      <JumpButton target={6} tone="secondary">Open RAG pipeline</JumpButton>
-    </div>
+    </Slide>
   )
 }
 
 function App() {
-  const [activeRagStep, setActiveRagStep] = useState(0)
-  const selectedRagStep = ragSteps[activeRagStep]
-
   return (
     <main className="deck-app">
-      <Deck
-        config={revealConfig}
-      >
-        <Slide transition="slide" className="title-slide">
-          <div className="slide-shell title-layout">
-            <div className="title-copy">
-              <p className="eyebrow">RAG + pgvector + Gemini + exact citations</p>
-              <h1>SambidhanGPT</h1>
-              <p className="title-subtitle">
-                AI-Powered Legal Document Q&amp;A with PDF Citation Highlighting
-              </p>
-              <JumpButton target={1}>Start with the problem</JumpButton>
-            </div>
-            <div className="title-visual" aria-hidden="true">
-              <div className="document-sheet">
-                <div className="sheet-rule sheet-rule-wide"></div>
-                <div className="sheet-rule"></div>
-                <div className="sheet-rule sheet-rule-short"></div>
-                <div className="highlight-band">Article 12: verified source</div>
-                <div className="sheet-rule"></div>
-                <div className="sheet-rule sheet-rule-wide"></div>
-              </div>
-              <div className="citation-chip">page 8, excerpt 3</div>
-            </div>
-          </div>
-        </Slide>
+      <Deck config={revealConfig}>
+        <CoverSlide />
 
         <Slide transition="slide">
-          <div className="slide-shell">
+          <div className="slide-shell intro-slide">
             <SectionHeader
-              eyebrow="Problem"
-              title="Legal AI needs verifiable boundaries"
-              lead="The project starts from a trust problem, not just an automation problem."
+              eyebrow="Introduction / Problem / Objective"
+              title="A citation-first assistant for legal PDFs"
+              lead="SambidhanGPT answers from the uploaded document and shows the exact source passage for verification."
             />
-            <div className="problem-grid">
-              {problemPoints.map(({ title, detail, icon }) => (
-                <article className="problem-card" key={title}>
-                  <span className="problem-mark">
-                    <ProblemIcon type={icon} />
-                  </span>
-                  <h3>{title}</h3>
-                  <p>{detail}</p>
-                </article>
-              ))}
-            </div>
-          </div>
-        </Slide>
-
-        <Slide transition="slide">
-          <div className="slide-shell">
-            <SectionHeader
-              eyebrow="Core idea"
-              title="Answer from the PDF, then show the source"
-              lead="SambidhanGPT keeps generation grounded by making source evidence part of the workflow."
-            />
-            <div className="process-strip">
-              {processSteps.map((step, index) => (
-                <Fragment animation="fade-up" asChild key={step.label}>
-                  <div className="process-step">
-                    <div className="process-step-top">
-                      <span className="process-step-index">
-                        {String(index + 1).padStart(2, '0')}
-                      </span>
-                      <ProcessIcon type={step.icon} />
-                    </div>
-                    <strong>{step.label}</strong>
-                  </div>
-                </Fragment>
-              ))}
-              <div className="process-glow" aria-hidden="true"></div>
-            </div>
-            <div className="thesis-panel">
-              <p>Every answer is constrained by uploaded document text.</p>
-              <p>Every answer returns citations users can inspect.</p>
-              <p>Citations jump to highlighted passages in the PDF viewer.</p>
-            </div>
-          </div>
-        </Slide>
-
-        <Slide transition="slide">
-          <div className="slide-shell compact-slide">
-            <SectionHeader
-              eyebrow="Objectives"
-              title="Build a citation-first legal document assistant"
-            />
-            <div className="checklist-grid">
-              {objectives.map((objective) => (
-                <div className="check-item" key={objective}>
-                  <span aria-hidden="true">
-                    <StatusIcon />
-                  </span>
-                  <p>{objective}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </Slide>
-
-        <Slide transition="zoom">
-          <div className="slide-shell figure-slide">
-            <SectionHeader
-              eyebrow="System overview"
-              title="Three tiers with agent-backed retrieval"
-              lead="React/Vite presents the workspace, Express/TypeScript coordinates agents, and PostgreSQL + Gemini provide evidence and generation."
-            />
-            <div className="architecture-layout">
-              <ArchitectureDiagram />
-            </div>
-          </div>
-        </Slide>
-
-        <Slide transition="slide">
-          <div className="slide-shell figure-slide">
-            <SectionHeader
-              eyebrow="User flow"
-              title="From authenticated upload to highlighted answer"
-              lead="The interaction remains simple while the system keeps ownership, evidence, and citation mapping intact."
-            />
-            <div className="flow-layout">
-              <UserFlowDiagram />
-              <div className="flow-list">
-                {['Register or log in', 'Upload PDF', 'Ask questions', 'Inspect cited answer', 'Browse clauses, suggestions, and analysis'].map(
-                  (item) => (
-                    <p key={item}>{item}</p>
-                  ),
-                )}
-              </div>
-            </div>
-          </div>
-        </Slide>
-
-        <Slide transition="zoom">
-          <div className="slide-shell figure-slide">
-            <SectionHeader
-              eyebrow="RAG pipeline"
-              title="Offline ingestion meets online question answering"
-              lead="The same vector space connects document chunks to user questions."
-            />
-            <RagPipeline
-              activeRagStep={activeRagStep}
-              setActiveRagStep={setActiveRagStep}
-              selectedRagStep={selectedRagStep}
-            />
-          </div>
-        </Slide>
-
-        <Slide transition="slide" className="figure-slide">
-          <div className="slide-shell">
-            <SectionHeader
-              eyebrow="Retrieval and search"
-              title="Cosine ranking with HNSW acceleration"
-              lead="SambidhanGPT stores dense embeddings in PostgreSQL and ranks chunks by semantic proximity."
-            />
-            <div className="retrieval-layout">
-              <div className="formula-panel">
-                <p className="formula-label">cosine similarity</p>
-                <LatexFormula />
-                <ul>
-                  <li>3072-dimensional embeddings</li>
-                  <li>Smallest cosine distance gives top chunks</li>
-                  <li><code>halfvec_cosine_ops</code> keeps pgvector search responsive</li>
-                </ul>
-              </div>
-              <figure className="figure-frame hnsw-figure">
-                <img src={hnswFigure} alt="Layered HNSW proximity graph" />
-              </figure>
-            </div>
-          </div>
-        </Slide>
-
-        <Slide transition="slide">
-          <div className="slide-shell">
-            <SectionHeader
-              eyebrow="Citation highlighting"
-              title="The answer is useful because the source is visible"
-            />
-            <div className="citation-layout">
-              <div className="answer-panel">
-                <p className="user-question">What does the contract say about termination?</p>
+            <div className="three-column">
+              <article className="text-panel accent-blue">
+                <h3>Introduction</h3>
                 <p>
-                  The agreement allows termination after written notice if a material breach is not
-                  cured within the required period.
+                  A web-based legal Q&amp;A system for constitutions, codes, contracts, and
+                  policies.
                 </p>
-                <button type="button" className="citation-button">Page 12 - termination clause</button>
-              </div>
-              <div className="pdf-panel">
-                <div className="pdf-toolbar">legal-document.pdf</div>
-                <div className="pdf-line long"></div>
-                <div className="pdf-line"></div>
-                <div className="pdf-highlight">material breach must be cured within the notice period</div>
-                <div className="pdf-line"></div>
-                <div className="pdf-line short"></div>
-              </div>
+                <p>
+                  Built with RAG, React, Express.js, PostgreSQL + pgvector, and Gemini.
+                </p>
+              </article>
+
+              <article className="text-panel accent-red">
+                <h3>Problem Statement</h3>
+                <ul>
+                  {problemItems.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </article>
+
+              <article className="text-panel accent-green">
+                <h3>Objectives</h3>
+                <ul>
+                  {objectives.map((objective) => (
+                    <li key={objective}>{objective}</li>
+                  ))}
+                </ul>
+              </article>
             </div>
           </div>
         </Slide>
 
         <Slide transition="slide">
-          <div className="slide-shell compact-slide">
+          <div className="slide-shell literature-slide">
             <SectionHeader
-              eyebrow="Legal intelligence"
-              title="Beyond chat: structured document understanding"
+              eyebrow="Literature Review"
+              title="Main findings from existing systems"
+              lead="The review establishes the need for strict grounding, passage-level citations, and legal-specific document understanding."
             />
-            <div className="feature-panels">
-              <Fragment animation="fade-up" asChild>
-                <article>
-                  <h3>Clause extraction</h3>
-                  <p>Indemnity, termination, liability, payment, jurisdiction, amendment, definitions, penalties.</p>
-                </article>
-              </Fragment>
-              <Fragment animation="fade-up" asChild>
-                <article>
-                  <h3>Suggested questions</h3>
-                  <p>Document-specific prompts help users begin with the most relevant legal issues.</p>
-                </article>
-              </Fragment>
-              <Fragment animation="fade-up" asChild>
-                <article>
-                  <h3>Analysis</h3>
-                  <p>Summary, risks, obligations, and key points are generated from retrieved document text.</p>
-                </article>
-              </Fragment>
-            </div>
-          </div>
-        </Slide>
-
-        <Slide transition="slide">
-          <div className="slide-shell">
-            <SectionHeader
-              eyebrow="Implementation stack"
-              title="A self-hostable legal RAG stack"
-            />
-            <div className="stack-grid">
-              {stackGroups.map(({ group, icon, items }) => (
-                <article className="stack-tile" key={group}>
-                  <div className="stack-tile-top">
-                    <StackIcon type={icon} />
-                    <h3>{group}</h3>
-                  </div>
-                  <p>{items.join(' / ')}</p>
-                </article>
-              ))}
-            </div>
-          </div>
-        </Slide>
-
-        <Slide transition="fade">
-          <div className="slide-shell">
-            <SectionHeader
-              eyebrow="E2E verification and results"
-              title="The tested behavior centers on trust"
-              lead="The strongest result is that answers remain grounded and navigable back to source passages."
-            />
-            <div className="results-layout">
-              <div className="results-list">
-                {verificationItems.map((item) => (
-                  <p key={item}><span aria-hidden="true"><StatusIcon /></span>{item}</p>
+            <div className="literature-layout">
+              <div className="finding-grid">
+                {literatureFindings.map((finding) => (
+                  <article className="finding-card" key={finding.topic}>
+                    <h3>{finding.topic}</h3>
+                    <p>{finding.insight}</p>
+                  </article>
                 ))}
               </div>
-              <div className="result-statement">
-                <strong>Result</strong>
-                <p>Document upload, grounded Q&amp;A, citations, highlighting, legal features, and access isolation passed end-to-end checks.</p>
+              <table className="comparison-table">
+                <thead>
+                  <tr>
+                    <th>Feature</th>
+                    <th>General LLM</th>
+                    <th>Document Chat</th>
+                    <th>SambidhanGPT</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {comparisonRows.map(([feature, general, documentChat, sambidhan]) => (
+                    <tr key={feature}>
+                      <th>{feature}</th>
+                      <td>{general}</td>
+                      <td>{documentChat}</td>
+                      <td className="table-positive">{sambidhan}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </Slide>
+
+        <Slide transition="slide">
+          <div className="slide-shell algorithm-slide">
+            <SectionHeader
+              eyebrow="Used Algorithm With Mathematical Prospect"
+              title="Core Algorithms Used"
+              lead="SambidhanGPT combines vector retrieval, graph search, text processing, citation mapping, and cryptographic security."
+            />
+            <article className="formula-panel algorithm-formula-panel">
+              <div>
+                <p className="formula-label">Cosine similarity</p>
+                <FormulaBlock />
               </div>
+            </article>
+            <div className="algorithm-strip">
+              {algorithmItems.map((item) => (
+                <article key={item.name}>
+                  <span>{item.course}</span>
+                  <h3>{item.name}</h3>
+                  <p>{item.detail}</p>
+                </article>
+              ))}
+            </div>
+          </div>
+        </Slide>
+
+        <Slide transition="slide">
+          <div className="slide-shell methodology-slide">
+            <SectionHeader
+              eyebrow="Research Methodology"
+              title="SambidhanGPT System Architecture"
+              lead="Presentation, application, data, and external AI layers used to build the system."
+            />
+            <SystemArchitectureDiagram />
+          </div>
+        </Slide>
+
+        <Slide transition="slide">
+          <div className="slide-shell preprocessing-slide">
+            <SectionHeader
+              eyebrow="Data Collection / Preprocessing"
+              title="Uploaded PDFs become searchable, citable evidence"
+              lead="The system processes text-based legal PDFs and stores both semantic vectors and source-location metadata."
+            />
+            <div className="pipeline-steps">
+              {preprocessingItems.map((item, index) => (
+                <article key={item.title}>
+                  <span>{String(index + 1).padStart(2, '0')}</span>
+                  <h3>{item.title}</h3>
+                  <p>{item.detail}</p>
+                </article>
+              ))}
+            </div>
+            <div className="preprocessing-note">
+              <strong>Important limitation</strong>
+              <p>
+                Scanned image-only PDFs are outside the current scope because the implemented
+                pipeline does not include OCR.
+              </p>
+            </div>
+          </div>
+        </Slide>
+
+        <Slide transition="slide">
+          <div className="slide-shell environment-slide">
+            <SectionHeader
+              eyebrow="Experimental Environment"
+              title="Implementation stack used for development and testing"
+            />
+            <div className="environment-grid">
+              {environmentGroups.map((group) => (
+                <article className="environment-card" key={group.label}>
+                  <h3>{group.label}</h3>
+                  <p>{group.value}</p>
+                </article>
+              ))}
+            </div>
+            <div className="environment-band">
+              <StatusMark>Language: TypeScript</StatusMark>
+              <StatusMark>Database: PostgreSQL + pgvector</StatusMark>
+              <StatusMark>LLM: Gemini 2.5 Flash</StatusMark>
+              <StatusMark>Embedding: 3072 dimensions</StatusMark>
+            </div>
+          </div>
+        </Slide>
+
+        <Slide transition="slide">
+          <div className="slide-shell performance-slide">
+            <SectionHeader
+              eyebrow="Performance Measure Tools"
+              title="Measurement focused on retrieval, correctness, and trust"
+              lead="The report evaluates behavior with unit tests, system tests, retrieval configuration, and citation verification."
+            />
+            <div className="measure-grid">
+              {performanceMeasures.map((measure) => (
+                <article className="measure-card" key={measure.label}>
+                  <span>{measure.label}</span>
+                  <strong>{measure.metric}</strong>
+                  <p>{measure.note}</p>
+                </article>
+              ))}
+            </div>
+            <div className="testing-matrix">
+              <div>
+                <h3>Unit Testing</h3>
+                <p>Hashing, chunking, page mapping, embeddings, cosine order, file filter, token expiry.</p>
+              </div>
+              <div>
+                <h3>System Testing</h3>
+                <p>Authentication, upload, grounded answers, refusal, highlighting, clauses, isolation, history.</p>
+              </div>
+            </div>
+          </div>
+        </Slide>
+
+        <Slide transition="slide">
+          <div className="slide-shell result-slide">
+            <SectionHeader
+              eyebrow="Result Analysis"
+              title="The implemented system meets the core trust objective"
+              lead="Results are presented around the observable behavior required for a trustworthy legal assistant."
+            />
+            <div className="result-layout">
+              <div className="result-board">
+                {resultItems.map((item) => (
+                  <p key={item}>
+                    <StatusMark>Pass</StatusMark>
+                    {item}
+                  </p>
+                ))}
+              </div>
+              <article className="citation-demo">
+                <div className="chat-card">
+                  <span>User question</span>
+                  <p>What does the document say about rights and obligations?</p>
+                </div>
+                <div className="answer-card">
+                  <span>Grounded answer</span>
+                  <p>Answer generated only from retrieved context.</p>
+                  <button type="button">Page citation</button>
+                </div>
+                <div className="pdf-card" aria-hidden="true">
+                  <span className="pdf-toolbar">legal-document.pdf</span>
+                  <span className="pdf-line wide"></span>
+                  <span className="pdf-line"></span>
+                  <span className="pdf-highlight">cited source passage highlighted</span>
+                  <span className="pdf-line short"></span>
+                </div>
+              </article>
+            </div>
+          </div>
+        </Slide>
+
+        <Slide transition="slide">
+          <div className="slide-shell conclusion-slide">
+            <SectionHeader
+              eyebrow="Conclusion"
+              title="SambidhanGPT makes legal PDF Q&A verifiable"
+              lead="The system demonstrates a practical citation-first approach for legal document understanding."
+            />
+            <div className="conclusion-grid">
+              {conclusionItems.map((item, index) => (
+                <article className="conclusion-card" key={item}>
+                  <span>{String(index + 1).padStart(2, '0')}</span>
+                  <p>{item}</p>
+                </article>
+              ))}
+            </div>
+          </div>
+        </Slide>
+
+        <Slide transition="slide">
+          <div className="slide-shell future-slide">
+            <SectionHeader
+              eyebrow="Future Recommendations"
+              title="Next improvements"
+              lead="The next version should improve document coverage, scale, security, and Nepali legal usability."
+            />
+            <div className="future-grid">
+              {futureItems.map((item) => (
+                <article className="future-card" key={item.text}>
+                  <span className="future-icon">
+                    <FutureIcon type={item.icon} />
+                  </span>
+                  <p>{item.text}</p>
+                </article>
+              ))}
             </div>
           </div>
         </Slide>
 
         <Slide transition="fade">
-          <div className="slide-shell">
+          <div className="slide-shell acknowledgement-slide">
             <SectionHeader
-              eyebrow="Limitations and future work"
-              title="The next version improves scale, coverage, and legal fit"
+              eyebrow="Acknowledgments"
+              title="With sincere gratitude"
+              lead="Acknowledgment is extended to the people and institutions who guided, supported, and evaluated the project."
             />
-            <div className="future-layout">
-              <div className="future-column">
-                <h3>Current limits</h3>
-                <p>No OCR for scanned PDFs</p>
-                <p>Gemini dependency</p>
-                <p>Slow large-document ingestion</p>
-                <p>No deep legal reasoning beyond source text</p>
-              </div>
-              <div className="future-column future-column-accent">
-                <h3>Next upgrades</h3>
-                <p>OCR pipeline</p>
-                <p>Background ingestion jobs</p>
-                <p>Stronger auth and DB constraints</p>
-                <p>Cross-document querying and Nepali legal terminology support</p>
-              </div>
+            <div className="ack-grid">
+              {acknowledgments.map((item) => (
+                <article className="ack-card" key={item.role}>
+                  <span>{item.role}</span>
+                  <h3>{item.name}</h3>
+                </article>
+              ))}
             </div>
-          </div>
-        </Slide>
-
-        <Slide transition="fade" className="closing-slide">
-          <div className="slide-shell closing-layout">
-            <div>
-              <p className="eyebrow">Closing</p>
-              <h2>SambidhanGPT makes legal PDF Q&amp;A verifiable.</h2>
-              <p className="closing-copy">
-                The key contribution is not just answering, but showing exactly where the
-                answer came from.
-              </p>
-            </div>
-            <div className="closing-actions">
-              <JumpButton target={4}>Architecture</JumpButton>
-              <JumpButton target={6}>RAG pipeline</JumpButton>
-              <JumpButton target={8}>Citation highlighting</JumpButton>
+            <div className="student-footer">
+              <p>{studentNames}</p>
             </div>
           </div>
         </Slide>
