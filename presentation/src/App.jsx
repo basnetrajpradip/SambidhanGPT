@@ -39,7 +39,7 @@ const objectives = Object.freeze([
   'Answer questions from uploaded legal PDFs.',
   'Highlight exact cited passages.',
   'Extract clauses, suggestions, and risks.',
-  'Apply CSIT algorithms in practice.',
+  'Apply algorithms in practice.',
 ])
 
 const literatureFindings = Object.freeze([
@@ -179,7 +179,7 @@ const conclusionItems = Object.freeze([
   'RAG keeps answers grounded in uploaded PDFs.',
   'Citations make every answer verifiable.',
   'Legal clauses and analysis improve document understanding.',
-  'CSIT algorithms were applied in a real system.',
+  'Various algorithms were applied in a real system.',
 ])
 
 const futureItems = Object.freeze([
