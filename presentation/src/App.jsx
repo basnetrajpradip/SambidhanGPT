@@ -400,7 +400,7 @@ function CoverSlide() {
           </div>
         </div>
 
-        <p className="cover-date">February, 2026</p>
+        <p className="cover-date">July, 2026</p>
       </div>
     </Slide>
   )
