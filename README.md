@@ -113,9 +113,10 @@ sambidhan-gpt/
 | POST   | `/api/documents/upload`          | Upload PDF → triggers ingestion, clauses, suggestions |
 | GET    | `/api/documents/:id/clauses`     | Return extracted legal clauses                        |
 | GET    | `/api/documents/:id/suggestions` | Return suggested questions                            |
+| DELETE | `/api/documents/:id`             | Delete a document and its generated data              |
 | POST   | `/api/chat`                      | Submit question → answer + citations                  |
 | GET    | `/api/conversations/:docId`      | Fetch conversation history                            |
-| GET    | `/documents/:id/file`            | Fetch uploaded pdf file                               |
+| GET    | `/api/documents/:id/file`        | Fetch uploaded pdf file                               |
 
 ---
 

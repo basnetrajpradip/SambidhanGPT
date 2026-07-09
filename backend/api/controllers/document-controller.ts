@@ -89,6 +89,40 @@ export const getDocument = async (req: Request, res: Response) => {
   }
 }
 
+const resolveDocumentFilePath = (filePath: string) => (path.isAbsolute(filePath) ? filePath : path.join(__dirname, '../../', filePath))
+
+const getErrorMessage = (err: unknown, fallback: string) => (err instanceof Error && err.message ? err.message : fallback)
+
+export const deleteDocument = async (req: Request, res: Response) => {
+  try {
+    const authReq = req as AuthenticatedRequest
+    const id = req.params.id as string
+    const doc = await getOwnedDocument(id, authReq.user.id)
+    if (!doc) {
+      return res.status(404).json({ error: 'Document not found.' })
+    }
+
+    await db.transaction(async (tx) => {
+      await tx.delete(documentAnalysis).where(eq(documentAnalysis.documentId, id))
+      await tx.delete(clauses).where(eq(clauses.documentId, id))
+      await tx.delete(suggestions).where(eq(suggestions.documentId, id))
+      await tx.delete(conversations).where(eq(conversations.documentId, id))
+      await tx.delete(chunks).where(eq(chunks.documentId, id))
+      await tx.delete(documents).where(and(eq(documents.id, id), eq(documents.ownerId, authReq.user.id)))
+    })
+
+    try {
+      await fs.promises.rm(resolveDocumentFilePath(doc.filePath), { force: true })
+    } catch (err: unknown) {
+      console.error('[deleteDocument] Failed to remove PDF file:', getErrorMessage(err, 'Unknown file deletion error.'))
+    }
+
+    res.json({ success: true })
+  } catch (err: unknown) {
+    res.status(500).json({ error: getErrorMessage(err, 'Failed to delete document.') })
+  }
+}
+
 export const getClauses = async (req: Request, res: Response) => {
   try {
     const authReq = req as AuthenticatedRequest
@@ -156,7 +190,7 @@ export const serveFile = async (req: Request, res: Response) => {
     if (!doc) {
       return res.status(404).json({ error: 'Document not found.' })
     }
-    const absPath = path.isAbsolute(doc.filePath) ? doc.filePath : path.join(__dirname, '../../', doc.filePath)
+    const absPath = resolveDocumentFilePath(doc.filePath)
     if (!fs.existsSync(absPath)) {
       return res.status(404).json({ error: 'PDF file not found on disk.' })
     }
