@@ -2,12 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ChangeEvent, DragEvent, KeyboardEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
-import { Clock, LogOut, MessageSquare, Send, Upload, FileText, X } from 'lucide-react'
+import { Clock, LogOut, MessageSquare, Send, Upload, FileText, Trash2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Textarea } from '@/components/ui/textarea'
-import { listDocuments, uploadDocument, type DocumentSummary } from '@/services/document-service'
+import { deleteDocument, listDocuments, uploadDocument, type DocumentSummary } from '@/services/document-service'
 import { resolveChatDocument } from '@/services/chat-service'
 import type { User } from '@/services/auth-service'
 
@@ -40,6 +40,7 @@ export default function HomePage({ user, onLogout }: HomePageProps) {
   const [progress, setProgress] = useState(0)
   const [documents, setDocuments] = useState<DocumentSummary[]>([])
   const [loadingDocuments, setLoadingDocuments] = useState(true)
+  const [deletingDocumentIds, setDeletingDocumentIds] = useState<ReadonlySet<string>>(() => new Set())
   const [homeQuestion, setHomeQuestion] = useState('')
   const [resolvingQuestion, setResolvingQuestion] = useState(false)
 
@@ -99,6 +100,29 @@ export default function HomePage({ user, onLogout }: HomePageProps) {
       const message = err instanceof Error ? err.message : 'Upload failed. Please try again.'
       toast.error(message)
       setUploading(false)
+    }
+  }
+
+  const handleRemoveDocument = async (doc: DocumentSummary) => {
+    if (deletingDocumentIds.has(doc.id)) return
+
+    const confirmed = window.confirm(`Remove "${doc.name}"? This will delete the document and its generated data.`)
+    if (!confirmed) return
+
+    setDeletingDocumentIds((prev) => new Set(prev).add(doc.id))
+    try {
+      await deleteDocument(doc.id)
+      setDocuments((prev) => prev.filter((item) => item.id !== doc.id))
+      toast.success('Document removed.')
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to remove document.'
+      toast.error(message)
+    } finally {
+      setDeletingDocumentIds((prev) => {
+        const next = new Set(prev)
+        next.delete(doc.id)
+        return next
+      })
     }
   }
 
@@ -166,27 +190,44 @@ export default function HomePage({ user, onLogout }: HomePageProps) {
               </Card>
             ) : (
               <div className="grid gap-3 md:grid-cols-2">
-                {documents.map((doc) => (
-                  <button
-                    key={doc.id}
-                    onClick={() => navigate(`/document/${doc.id}`)}
-                  className="rounded-3xl border border-white/60 bg-card/80 p-4 text-left shadow-xl shadow-slate-900/5 backdrop-blur transition hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-2xl hover:shadow-primary/10"
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="rounded-2xl bg-primary/10 p-2 text-primary ring-1 ring-primary/10">
-                        <FileText className="h-5 w-5" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold">{doc.name}</p>
-                        <p className="mt-1 text-xs text-muted-foreground">{formatDate(doc.uploadedAt)}</p>
-                        <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
-                          <span className="rounded-full bg-muted px-2 py-0.5">{doc.chunkCount} chunks</span>
-                          <span className="rounded-full bg-muted px-2 py-0.5">{doc.conversationCount ?? 0} turns</span>
+                {documents.map((doc) => {
+                  const isDeleting = deletingDocumentIds.has(doc.id)
+
+                  return (
+                    <div
+                      key={doc.id}
+                      className="relative rounded-3xl border border-white/60 bg-card/80 shadow-xl shadow-slate-900/5 backdrop-blur transition hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-2xl hover:shadow-primary/10"
+                    >
+                      <button type="button" onClick={() => navigate(`/document/${doc.id}`)} disabled={isDeleting} className="block w-full rounded-3xl p-4 pr-14 text-left disabled:cursor-not-allowed disabled:opacity-60">
+                        <div className="flex items-start gap-3">
+                          <div className="rounded-2xl bg-primary/10 p-2 text-primary ring-1 ring-primary/10">
+                            <FileText className="h-5 w-5" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-semibold">{doc.name}</p>
+                            <p className="mt-1 text-xs text-muted-foreground">{formatDate(doc.uploadedAt)}</p>
+                            <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
+                              <span className="rounded-full bg-muted px-2 py-0.5">{doc.chunkCount} chunks</span>
+                              <span className="rounded-full bg-muted px-2 py-0.5">{doc.conversationCount ?? 0} turns</span>
+                            </div>
+                          </div>
                         </div>
-                      </div>
+                      </button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => void handleRemoveDocument(doc)}
+                        disabled={isDeleting}
+                        aria-label={`Remove ${doc.name}`}
+                        title={`Remove ${doc.name}`}
+                        className="absolute right-3 top-3 rounded-xl text-muted-foreground hover:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
-                  </button>
-                ))}
+                  )
+                })}
               </div>
             )}
           </section>

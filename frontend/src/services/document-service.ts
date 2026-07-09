@@ -91,6 +91,10 @@ export async function getDocument(documentId: string): Promise<DocumentSummary> 
   return response.data
 }
 
+export async function deleteDocument(documentId: string): Promise<void> {
+  await api.delete(`/documents/${documentId}`)
+}
+
 export async function getAnalysis(documentId: string): Promise<DocumentAnalysis> {
   const response = await api.get<DocumentAnalysis>(`/documents/${documentId}/analysis`)
   return response.data
